@@ -11,16 +11,19 @@ export default function NaturalInput({ onEventCreated }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [speechSupported, setSpeechSupported] = useState(true)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
-    const SR = window.SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition
     if (!SR) { setSpeechSupported(false); return }
     const rec = new SR()
     rec.lang = 'de-DE'
     rec.continuous = false
     rec.interimResults = false
-    rec.onresult = (e) => setText(e.results[0][0].transcript)
+    rec.onresult = (e: any) => setText(e.results[0][0].transcript)
     rec.onend = () => setListening(false)
     recognitionRef.current = rec
   }, [])
