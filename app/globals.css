@@ -88,6 +88,13 @@ body {
 .fc-theme-standard td, .fc-theme-standard th {
   border-color: var(--cal-grid) !important;
 }
+/* border-collapse: separate damit border-right nicht kollabiert */
+.fc .fc-scrollgrid-sync-table,
+.fc .fc-col-header table,
+.fc .fc-timegrid-body table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
 /* Vertikale Tageslinien explizit auf Zeitraster-Spalten und Header */
 .fc .fc-timegrid-col {
   border-right: 1px solid var(--cal-grid) !important;
