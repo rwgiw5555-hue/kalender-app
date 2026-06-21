@@ -6,6 +6,7 @@ import interactionPlugin, { DateClickArg, EventResizeDoneArg } from '@fullcalend
 import { EventClickArg, EventDropArg, EventInput } from '@fullcalendar/core'
 import { useRef, useState } from 'react'
 import EventModal, { EventFormData } from './EventModal'
+import { CalendarTheme } from './SettingsPanel'
 
 const CATEGORY_COLORS: Record<string, string> = {
   Arbeit: '#3b82f6',
@@ -27,6 +28,7 @@ interface DbEvent {
 interface Props {
   events: DbEvent[]
   onRefresh: () => void
+  theme: CalendarTheme
 }
 
 function toFcEvents(events: DbEvent[]): EventInput[] {
@@ -46,7 +48,7 @@ function toLocalISO(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export default function Calendar({ events, onRefresh }: Props) {
+export default function Calendar({ events, onRefresh, theme }: Props) {
   const calRef = useRef<FullCalendar>(null)
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
 
@@ -116,34 +118,49 @@ export default function Calendar({ events, onRefresh }: Props) {
   }
 
   return (
-    <div className="flex-1 h-full overflow-hidden px-2 pt-2 pb-24">
-      <FullCalendar
-        ref={calRef}
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView="timeGridWeek"
-        locale="de"
-        firstDay={1}
-        headerToolbar={{
-          left: 'prev,next today',
-          center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay',
-        }}
-        buttonText={{ today: 'Heute', month: 'Monat', week: 'Woche', day: 'Tag' }}
-        slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
-        events={toFcEvents(events)}
-        editable
-        droppable
-        selectable
-        nowIndicator
-        scrollTime="07:00:00"
-        dateClick={handleDateClick}
-        eventClick={handleEventClick}
-        eventDrop={handleDrop}
-        eventResize={handleResize}
-        height="100%"
-        eventDisplay="block"
-        eventBorderColor="transparent"
-      />
+    <>
+      {/* CSS-Variablen für Theme live setzen */}
+      <style>{`
+        :root {
+          --cal-accent: ${theme.accent};
+          --cal-slot-bg: ${theme.slotBg};
+          --cal-slot-alt: ${theme.slotAltBg};
+          --cal-grid: ${theme.gridLine};
+        }
+      `}</style>
+
+      <div className="flex-1 h-full overflow-hidden px-3 pt-2 pb-24">
+        <FullCalendar
+          ref={calRef}
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="timeGridWeek"
+          locale="de"
+          firstDay={1}
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay',
+          }}
+          buttonText={{ today: 'Heute', month: 'Monat', week: 'Woche', day: 'Tag' }}
+          slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+          slotDuration="00:30:00"
+          slotMinTime="00:00:00"
+          slotMaxTime="24:00:00"
+          events={toFcEvents(events)}
+          editable
+          droppable
+          selectable
+          nowIndicator
+          scrollTime="07:00:00"
+          dateClick={handleDateClick}
+          eventClick={handleEventClick}
+          eventDrop={handleDrop}
+          eventResize={handleResize}
+          height="100%"
+          eventDisplay="block"
+          eventBorderColor="transparent"
+        />
+      </div>
 
       {modal && (
         <EventModal
@@ -154,6 +171,6 @@ export default function Calendar({ events, onRefresh }: Props) {
           onClose={() => setModal(null)}
         />
       )}
-    </div>
+    </>
   )
 }

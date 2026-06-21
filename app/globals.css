@@ -17,64 +17,133 @@ body {
 }
 
 /* FullCalendar overrides */
+
+/* Toolbar Buttons */
 .fc .fc-button {
   background: white !important;
   border: 1px solid #e5e7eb !important;
   color: #374151 !important;
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   font-size: 13px !important;
-  padding: 6px 12px !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+  padding: 6px 14px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
   font-weight: 500 !important;
+  transition: all 0.15s ease !important;
 }
 .fc .fc-button:hover {
-  background: #f9fafb !important;
+  background: #f3f4f6 !important;
+  border-color: #d1d5db !important;
 }
 .fc .fc-button-primary:not(:disabled).fc-button-active,
 .fc .fc-button-primary:not(:disabled):active {
-  background: #3b82f6 !important;
+  background: var(--cal-accent) !important;
   color: white !important;
-  border-color: #3b82f6 !important;
+  border-color: var(--cal-accent) !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--cal-accent) 40%, transparent) !important;
 }
 .fc .fc-toolbar-title {
   font-size: 18px !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   color: #111827 !important;
+  letter-spacing: -0.3px !important;
 }
-.fc-theme-standard td, .fc-theme-standard th {
-  border-color: #f3f4f6 !important;
-}
-.fc .fc-daygrid-day:hover {
-  background: #f9fafb !important;
-}
-.fc .fc-event {
-  border-radius: 6px !important;
-  font-size: 12px !important;
-  padding: 1px 4px !important;
-}
+
+/* Wochentag-Header */
 .fc .fc-col-header-cell-cushion {
   font-size: 12px !important;
   font-weight: 600 !important;
-  color: #6b7280 !important;
+  color: #9ca3af !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
+  letter-spacing: 0.08em !important;
+  padding: 8px 0 !important;
+}
+.fc .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
+  color: var(--cal-accent) !important;
+}
+
+/* Zeitraster — moderne Streifen */
+.fc .fc-timegrid-slot {
+  height: 28px !important;
+}
+.fc .fc-timegrid-slot-lane {
+  background: var(--cal-slot-bg) !important;
+}
+/* Jede zweite Stunde (gerade) bekommt Alt-Farbe */
+.fc .fc-timegrid-slot:nth-child(4n+1) .fc-timegrid-slot-lane,
+.fc .fc-timegrid-slot:nth-child(4n+2) .fc-timegrid-slot-lane {
+  background: var(--cal-slot-alt) !important;
+}
+/* Halbe-Stunde-Linie: gestrichelt */
+.fc .fc-timegrid-slot-minor {
+  border-top-style: dashed !important;
+  border-top-color: var(--cal-grid) !important;
+  border-top-width: 1px !important;
+}
+/* Volle-Stunde-Linie: solide, etwas dicker */
+.fc .fc-timegrid-slot:not(.fc-timegrid-slot-minor) {
+  border-top: 1.5px solid var(--cal-grid) !important;
+}
+
+/* Spalten-Trennlinien */
+.fc-theme-standard td, .fc-theme-standard th {
+  border-color: var(--cal-grid) !important;
+}
+
+/* Now-Indicator */
+.fc .fc-timegrid-now-indicator-line {
+  border-color: var(--cal-accent) !important;
+  border-width: 2px !important;
+}
+.fc .fc-timegrid-now-indicator-arrow {
+  border-top-color: var(--cal-accent) !important;
+  border-bottom-color: var(--cal-accent) !important;
+}
+
+/* Heute-Spalte */
+.fc .fc-day-today {
+  background: color-mix(in srgb, var(--cal-accent) 5%, transparent) !important;
+}
+
+/* Monatsansicht */
+.fc .fc-daygrid-day:hover {
+  background: color-mix(in srgb, var(--cal-accent) 4%, white) !important;
 }
 .fc .fc-daygrid-day-number {
   font-size: 13px !important;
   color: #374151 !important;
-}
-.fc .fc-day-today {
-  background: #eff6ff !important;
+  font-weight: 500 !important;
 }
 .fc .fc-day-today .fc-daygrid-day-number {
-  background: #3b82f6;
-  color: white;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: var(--cal-accent) !important;
+  color: white !important;
+  border-radius: 50% !important;
+  width: 26px !important;
+  height: 26px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 4px !important;
+}
+
+/* Events */
+.fc .fc-event {
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 2px 6px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
+  cursor: pointer !important;
+}
+.fc .fc-event:hover {
+  filter: brightness(0.92) !important;
+}
+
+/* Zeitlabel links */
+.fc .fc-timegrid-slot-label-cushion {
+  font-size: 11px !important;
+  color: #9ca3af !important;
+  font-weight: 500 !important;
+  font-variant-numeric: tabular-nums !important;
 }
 
 /* Modal animations */
