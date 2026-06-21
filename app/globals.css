@@ -42,10 +42,10 @@ body {
   box-shadow: 0 2px 8px color-mix(in srgb, var(--cal-accent) 40%, transparent) !important;
 }
 .fc .fc-toolbar-title {
-  font-size: 18px !important;
-  font-weight: 700 !important;
-  color: #111827 !important;
-  letter-spacing: -0.3px !important;
+  font-size: 17px !important;
+  font-weight: 500 !important;
+  color: #9ca3af !important;
+  letter-spacing: -0.2px !important;
 }
 
 /* Wochentag-Header */
@@ -108,14 +108,14 @@ body {
   border-top: 2px solid color-mix(in srgb, var(--cal-grid) 200%, transparent) !important;
 }
 
-/* Now-Indicator */
+/* Now-Indicator — immer Rot */
 .fc .fc-timegrid-now-indicator-line {
-  border-color: var(--cal-accent) !important;
+  border-color: #ef4444 !important;
   border-width: 2px !important;
 }
 .fc .fc-timegrid-now-indicator-arrow {
-  border-top-color: var(--cal-accent) !important;
-  border-bottom-color: var(--cal-accent) !important;
+  border-top-color: #ef4444 !important;
+  border-bottom-color: #ef4444 !important;
 }
 
 /* Heute-Spalte */
