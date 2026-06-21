@@ -31,6 +31,13 @@ interface Props {
   theme: CalendarTheme
 }
 
+const TIME_BLOCKS: EventInput[] = [
+  { groupId: 'timeblock', start: 'T06:00:00', end: 'T12:00:00', display: 'background', backgroundColor: 'rgba(255,220,100,0.06)', title: 'Morgen' },
+  { groupId: 'timeblock', start: 'T12:00:00', end: 'T17:00:00', display: 'background', backgroundColor: 'rgba(100,200,255,0.06)', title: 'Mittag' },
+  { groupId: 'timeblock', start: 'T17:00:00', end: 'T21:00:00', display: 'background', backgroundColor: 'rgba(255,150,100,0.06)', title: 'Abend' },
+  { groupId: 'timeblock', start: 'T21:00:00', end: 'T24:00:00', display: 'background', backgroundColor: 'rgba(100,100,200,0.06)', title: 'Nacht' },
+]
+
 function toFcEvents(events: DbEvent[]): EventInput[] {
   return events.map(e => ({
     id: String(e.id),
@@ -51,6 +58,7 @@ function toLocalISO(d: Date) {
 export default function Calendar({ events, onRefresh, theme }: Props) {
   const calRef = useRef<FullCalendar>(null)
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
+  const dragging = useRef(false)
 
   function handleDateClick(arg: DateClickArg) {
     const start = new Date(arg.date)
@@ -59,6 +67,7 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
   }
 
   function handleEventClick(arg: EventClickArg) {
+    if (dragging.current) return
     const ev = arg.event
     setModal({
       mode: 'edit',
@@ -74,6 +83,8 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
   }
 
   async function handleDrop(arg: EventDropArg) {
+    dragging.current = true
+    setTimeout(() => { dragging.current = false }, 300)
     const end = arg.event.end ?? new Date(arg.event.start!.getTime() + 3600000)
     await fetch(`/api/events/${arg.event.id}`, {
       method: 'PUT',
@@ -146,7 +157,7 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
           slotDuration="00:30:00"
           slotMinTime="00:00:00"
           slotMaxTime="24:00:00"
-          events={toFcEvents(events)}
+          events={[...toFcEvents(events), ...TIME_BLOCKS]}
           editable
           droppable
           selectable

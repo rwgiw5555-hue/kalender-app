@@ -84,9 +84,28 @@ body {
   border-top: 1.5px solid var(--cal-grid) !important;
 }
 
-/* Spalten-Trennlinien */
+/* Spalten-Trennlinien — Tage klar trennen */
 .fc-theme-standard td, .fc-theme-standard th {
   border-color: var(--cal-grid) !important;
+}
+/* Vertikale Tages-Trennlinie dicker */
+.fc .fc-timegrid-col {
+  border-left: 2px solid color-mix(in srgb, var(--cal-grid) 180%, transparent) !important;
+}
+.fc .fc-timegrid-col:first-child {
+  border-left: none !important;
+}
+/* Tageszeit-Zonen Label links in der Zeitachse */
+.fc .fc-timegrid-slot-label[data-time="06:00:00"] .fc-timegrid-slot-label-cushion::after { content: " ☀️"; }
+.fc .fc-timegrid-slot-label[data-time="12:00:00"] .fc-timegrid-slot-label-cushion::after { content: " 🌤"; }
+.fc .fc-timegrid-slot-label[data-time="17:00:00"] .fc-timegrid-slot-label-cushion::after { content: " 🌆"; }
+.fc .fc-timegrid-slot-label[data-time="21:00:00"] .fc-timegrid-slot-label-cushion::after { content: " 🌙"; }
+/* Stunden-Markierungen für Tageszeiten extra hervorheben */
+.fc .fc-timegrid-slot[data-time="06:00:00"],
+.fc .fc-timegrid-slot[data-time="12:00:00"],
+.fc .fc-timegrid-slot[data-time="17:00:00"],
+.fc .fc-timegrid-slot[data-time="21:00:00"] {
+  border-top: 2px solid color-mix(in srgb, var(--cal-grid) 200%, transparent) !important;
 }
 
 /* Now-Indicator */
