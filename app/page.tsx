@@ -16,9 +16,16 @@ export interface DbEvent {
 
 const DEFAULT_THEME = PRESETS[0].theme
 
+const THEME_VERSION = '2'
+
 function loadTheme(): CalendarTheme {
   if (typeof window === 'undefined') return DEFAULT_THEME
   try {
+    // Versionsprüfung — bei neuer Version altes Theme verwerfen
+    if (localStorage.getItem('cal-theme-version') !== THEME_VERSION) {
+      localStorage.removeItem('cal-theme')
+      localStorage.setItem('cal-theme-version', THEME_VERSION)
+    }
     const saved = localStorage.getItem('cal-theme')
     return saved ? JSON.parse(saved) : DEFAULT_THEME
   } catch {

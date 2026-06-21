@@ -88,10 +88,13 @@ body {
 .fc-theme-standard td, .fc-theme-standard th {
   border-color: var(--cal-grid) !important;
 }
-/* Vertikale Tages-Trennlinie — box-shadow umgeht FullCalendar-Overrides */
-.fc .fc-timegrid-col + .fc-timegrid-col,
-.fc .fc-col-header-cell + .fc-col-header-cell {
-  box-shadow: -2px 0 0 0 var(--cal-grid) !important;
+/* Vertikale Tages-Trennlinie — outline + inset box-shadow für maximale Kompatibilität */
+.fc-theme-standard .fc-timegrid-body table td.fc-timegrid-col + td.fc-timegrid-col {
+  border-left: 2px solid var(--cal-grid) !important;
+  box-shadow: inset 2px 0 0 var(--cal-grid) !important;
+}
+.fc-theme-standard .fc-col-header-cell + .fc-col-header-cell {
+  border-left: 2px solid var(--cal-grid) !important;
 }
 /* Zeitachsen-Spalte rechts abgrenzen */
 .fc .fc-timegrid-axis {
