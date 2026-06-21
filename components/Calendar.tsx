@@ -61,24 +61,21 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
   const dragging = useRef(false)
 
-  // Vertikale Tageslinien per JS direkt ins DOM einzeichnen
+  function drawLines() {
+    if (!containerRef.current) return
+    containerRef.current.querySelectorAll<HTMLElement>('.fc-timegrid-col').forEach((col, i) => {
+      col.style.setProperty('border-right', i === 0 ? 'none' : '', '')
+      col.style.setProperty('border-left', i === 0 ? 'none' : `2px solid ${theme.gridLine}`, 'important')
+    })
+    containerRef.current.querySelectorAll<HTMLElement>('.fc-col-header-cell').forEach((cell, i) => {
+      cell.style.setProperty('border-left', i === 0 ? 'none' : `2px solid ${theme.gridLine}`, 'important')
+    })
+  }
+
   useEffect(() => {
-    function drawLines() {
-      if (!containerRef.current) return
-      const cols = containerRef.current.querySelectorAll<HTMLElement>('.fc-timegrid-col')
-      cols.forEach((col, i) => {
-        if (i === 0) return
-        col.style.borderLeft = `2px solid ${theme.gridLine}`
-      })
-      const headerCells = containerRef.current.querySelectorAll<HTMLElement>('.fc-col-header-cell')
-      headerCells.forEach((cell, i) => {
-        if (i === 0) return
-        cell.style.borderLeft = `2px solid ${theme.gridLine}`
-      })
-    }
-    // Kurz warten bis FullCalendar gerendert hat
-    const t = setTimeout(drawLines, 100)
+    const t = setTimeout(drawLines, 150)
     return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme.gridLine])
 
   function handleDateClick(arg: DateClickArg) {
@@ -184,6 +181,7 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
           selectable
           nowIndicator
           scrollTime="07:00:00"
+          datesSet={() => setTimeout(drawLines, 50)}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
           eventDrop={handleDrop}
