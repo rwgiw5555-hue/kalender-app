@@ -58,25 +58,29 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
   const dragging = useRef(false)
   const drawTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const drawLines = useCallback(() => {
+  // MutationObserver: reagiert sofort wenn FullCalendar Inline-Styles setzt
+  useEffect(() => {
     if (!containerRef.current) return
-    // Alle alten Inline-Styles entfernen die frühere Versuche hinterlassen haben
-    containerRef.current.querySelectorAll<HTMLElement>('.fc-timegrid-col, .fc-col-header-cell, .fc-timegrid-slot-lane').forEach(el => {
-      el.style.removeProperty('border-left')
-      el.style.removeProperty('border-right')
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach(m => {
+        const el = m.target as HTMLElement
+        if (el.classList.contains('fc-timegrid-slot-lane') || el.classList.contains('fc-col-header-cell')) {
+          el.style.setProperty('border-right', `1px solid ${theme.gridLine}`, 'important')
+        }
+      })
     })
-  }, [])
+    observer.observe(containerRef.current, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style'],
+    })
+    return () => observer.disconnect()
+  }, [theme.gridLine])
 
-  // Debounced drawLines — verhindert Absturz bei schnellem Klicken
   const scheduleDraw = useCallback(() => {
     if (drawTimer.current) clearTimeout(drawTimer.current)
-    drawTimer.current = setTimeout(drawLines, 80)
-  }, [drawLines])
-
-  useEffect(() => {
-    scheduleDraw()
-    return () => { if (drawTimer.current) clearTimeout(drawTimer.current) }
-  }, [scheduleDraw])
+    drawTimer.current = setTimeout(() => {}, 80)
+  }, [])
 
   function handleDateClick(arg: DateClickArg) {
     const start = new Date(arg.date)
