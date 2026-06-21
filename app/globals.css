@@ -95,12 +95,16 @@ body {
   border-collapse: separate !important;
   border-spacing: 0 !important;
 }
-/* Vertikale Tageslinien explizit auf Zeitraster-Spalten und Header */
-.fc .fc-timegrid-col {
-  border-right: 1px solid var(--cal-grid) !important;
+/* Vertikale Tageslinien — direkt auf die tatsächlich gerenderte Klasse */
+.fc .fc-timegrid-slot-lane {
+  border-right-width: 1px !important;
+  border-right-style: solid !important;
+  border-right-color: var(--cal-grid) !important;
 }
 .fc .fc-col-header-cell {
-  border-right: 1px solid var(--cal-grid) !important;
+  border-right-width: 1px !important;
+  border-right-style: solid !important;
+  border-right-color: var(--cal-grid) !important;
 }
 /* Zeitachsen-Spalte rechts abgrenzen */
 .fc .fc-timegrid-axis {

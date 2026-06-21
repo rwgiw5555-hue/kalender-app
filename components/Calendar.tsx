@@ -60,21 +60,12 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
 
   const drawLines = useCallback(() => {
     if (!containerRef.current) return
-    containerRef.current.querySelectorAll<HTMLElement>('.fc-timegrid-col').forEach((col, i) => {
-      if (i === 0) {
-        col.style.removeProperty('border-left')
-      } else {
-        col.style.setProperty('border-left', `2px solid ${theme.gridLine}`, 'important')
-      }
+    // Alle alten Inline-Styles entfernen die frühere Versuche hinterlassen haben
+    containerRef.current.querySelectorAll<HTMLElement>('.fc-timegrid-col, .fc-col-header-cell, .fc-timegrid-slot-lane').forEach(el => {
+      el.style.removeProperty('border-left')
+      el.style.removeProperty('border-right')
     })
-    containerRef.current.querySelectorAll<HTMLElement>('.fc-col-header-cell').forEach((cell, i) => {
-      if (i === 0) {
-        cell.style.removeProperty('border-left')
-      } else {
-        cell.style.setProperty('border-left', `2px solid ${theme.gridLine}`, 'important')
-      }
-    })
-  }, [theme.gridLine])
+  }, [])
 
   // Debounced drawLines — verhindert Absturz bei schnellem Klicken
   const scheduleDraw = useCallback(() => {
