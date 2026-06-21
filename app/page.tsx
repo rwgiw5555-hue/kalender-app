@@ -1,10 +1,9 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import Sidebar from '@/components/Sidebar'
 import CalendarView from '@/components/Calendar'
-import NaturalInput from '@/components/NaturalInput'
+import EventModal, { EventFormData } from '@/components/EventModal'
 
-interface DbEvent {
+export interface DbEvent {
   id: number
   title: string
   description?: string | null
@@ -16,7 +15,7 @@ interface DbEvent {
 
 export default function Home() {
   const [events, setEvents] = useState<DbEvent[]>([])
-  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
+  const [addModal, setAddModal] = useState(false)
 
   const loadEvents = useCallback(async () => {
     const res = await fetch('/api/events')
@@ -25,31 +24,41 @@ export default function Home() {
 
   useEffect(() => { loadEvents() }, [loadEvents])
 
-  function toggleCategory(cat: string) {
-    setHiddenCategories(prev => {
-      const next = new Set(prev)
-      next.has(cat) ? next.delete(cat) : next.add(cat)
-      return next
+  async function handleSave(data: EventFormData) {
+    await fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     })
+    setAddModal(false)
+    loadEvents()
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f5f5f7]">
-      <Sidebar hiddenCategories={hiddenCategories} onToggleCategory={toggleCategory} />
+    <div className="relative flex flex-col h-screen bg-white overflow-hidden">
+      {/* Kalender füllt den ganzen Raum */}
+      <CalendarView events={events} onRefresh={loadEvents} />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-100 px-6 py-3 shadow-sm">
-          <NaturalInput onEventCreated={loadEvents} />
-        </header>
+      {/* + Button unten mittig */}
+      <button
+        onClick={() => setAddModal(true)}
+        className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 w-14 h-14 rounded-full bg-blue-500 text-white shadow-lg hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center"
+        aria-label="Neuer Termin"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
 
-        <main className="flex-1 overflow-auto p-4 bg-white m-4 rounded-2xl shadow-sm border border-gray-100">
-          <CalendarView
-            events={events}
-            hiddenCategories={hiddenCategories}
-            onRefresh={loadEvents}
-          />
-        </main>
-      </div>
+      {addModal && (
+        <EventModal
+          mode="create"
+          initial={{}}
+          onSave={handleSave}
+          onClose={() => setAddModal(false)}
+        />
+      )}
     </div>
   )
 }

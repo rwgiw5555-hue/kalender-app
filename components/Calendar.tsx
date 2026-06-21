@@ -26,35 +26,29 @@ interface DbEvent {
 
 interface Props {
   events: DbEvent[]
-  hiddenCategories: Set<string>
   onRefresh: () => void
 }
 
-function toFcEvents(events: DbEvent[], hidden: Set<string>): EventInput[] {
-  return events
-    .filter(e => !hidden.has(e.category ?? 'Sonstiges'))
-    .map(e => ({
-      id: String(e.id),
-      title: e.title,
-      start: e.startTime,
-      end: e.endTime,
-      backgroundColor: e.color ?? CATEGORY_COLORS[e.category ?? 'Sonstiges'] ?? '#8b5cf6',
-      borderColor: 'transparent',
-      extendedProps: { description: e.description, category: e.category },
-    }))
+function toFcEvents(events: DbEvent[]): EventInput[] {
+  return events.map(e => ({
+    id: String(e.id),
+    title: e.title,
+    start: e.startTime,
+    end: e.endTime,
+    backgroundColor: e.color ?? CATEGORY_COLORS[e.category ?? 'Sonstiges'] ?? '#8b5cf6',
+    borderColor: 'transparent',
+    extendedProps: { description: e.description, category: e.category },
+  }))
 }
 
 function pad(n: number) { return String(n).padStart(2, '0') }
 function toLocalISO(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export default function Calendar({ events, hiddenCategories, onRefresh }: Props) {
+export default function Calendar({ events, onRefresh }: Props) {
   const calRef = useRef<FullCalendar>(null)
-  const [modal, setModal] = useState<{
-    mode: 'create' | 'edit'
-    initial: Partial<EventFormData>
-  } | null>(null)
+  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
 
   function handleDateClick(arg: DateClickArg) {
     const start = new Date(arg.date)
@@ -78,10 +72,11 @@ export default function Calendar({ events, hiddenCategories, onRefresh }: Props)
   }
 
   async function handleDrop(arg: EventDropArg) {
+    const end = arg.event.end ?? new Date(arg.event.start!.getTime() + 3600000)
     await fetch(`/api/events/${arg.event.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ startTime: arg.event.start!.toISOString(), endTime: (arg.event.end ?? new Date(arg.event.start!.getTime()+3600000)).toISOString() }),
+      body: JSON.stringify({ startTime: arg.event.start!.toISOString(), endTime: end.toISOString() }),
     })
     onRefresh()
   }
@@ -121,22 +116,26 @@ export default function Calendar({ events, hiddenCategories, onRefresh }: Props)
   }
 
   return (
-    <div className="flex-1 overflow-hidden">
+    <div className="flex-1 h-full overflow-hidden px-2 pt-2 pb-24">
       <FullCalendar
         ref={calRef}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
+        initialView="timeGridWeek"
         locale="de"
+        firstDay={1}
         headerToolbar={{
           left: 'prev,next today',
           center: 'title',
           right: 'dayGridMonth,timeGridWeek,timeGridDay',
         }}
         buttonText={{ today: 'Heute', month: 'Monat', week: 'Woche', day: 'Tag' }}
-        events={toFcEvents(events, hiddenCategories)}
+        slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+        events={toFcEvents(events)}
         editable
         droppable
         selectable
+        nowIndicator
+        scrollTime="07:00:00"
         dateClick={handleDateClick}
         eventClick={handleEventClick}
         eventDrop={handleDrop}
