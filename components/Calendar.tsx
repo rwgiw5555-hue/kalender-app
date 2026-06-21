@@ -4,9 +4,10 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin, { DateClickArg, EventResizeDoneArg } from '@fullcalendar/interaction'
 import { EventClickArg, EventDropArg, EventInput } from '@fullcalendar/core'
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import EventModal, { EventFormData } from './EventModal'
 import { CalendarTheme } from './SettingsPanel'
+import { getHolidaysForRange } from '@/lib/holidays'
 
 const CATEGORY_COLORS: Record<string, string> = {
   Arbeit: '#3b82f6',
@@ -31,12 +32,7 @@ interface Props {
   theme: CalendarTheme
 }
 
-const TIME_BLOCKS: EventInput[] = [
-  { groupId: 'timeblock', start: 'T06:00:00', end: 'T12:00:00', display: 'background', backgroundColor: 'rgba(255,220,100,0.06)', title: 'Morgen' },
-  { groupId: 'timeblock', start: 'T12:00:00', end: 'T17:00:00', display: 'background', backgroundColor: 'rgba(100,200,255,0.06)', title: 'Mittag' },
-  { groupId: 'timeblock', start: 'T17:00:00', end: 'T21:00:00', display: 'background', backgroundColor: 'rgba(255,150,100,0.06)', title: 'Abend' },
-  { groupId: 'timeblock', start: 'T21:00:00', end: 'T24:00:00', display: 'background', backgroundColor: 'rgba(100,100,200,0.06)', title: 'Nacht' },
-]
+const HOLIDAYS = getHolidaysForRange(2024, 2027)
 
 function toFcEvents(events: DbEvent[]): EventInput[] {
   return events.map(e => ({
@@ -60,23 +56,36 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
   const dragging = useRef(false)
+  const drawTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function drawLines() {
+  const drawLines = useCallback(() => {
     if (!containerRef.current) return
     containerRef.current.querySelectorAll<HTMLElement>('.fc-timegrid-col').forEach((col, i) => {
-      col.style.setProperty('border-right', i === 0 ? 'none' : '', '')
-      col.style.setProperty('border-left', i === 0 ? 'none' : `2px solid ${theme.gridLine}`, 'important')
+      if (i === 0) {
+        col.style.removeProperty('border-left')
+      } else {
+        col.style.setProperty('border-left', `2px solid ${theme.gridLine}`, 'important')
+      }
     })
     containerRef.current.querySelectorAll<HTMLElement>('.fc-col-header-cell').forEach((cell, i) => {
-      cell.style.setProperty('border-left', i === 0 ? 'none' : `2px solid ${theme.gridLine}`, 'important')
+      if (i === 0) {
+        cell.style.removeProperty('border-left')
+      } else {
+        cell.style.setProperty('border-left', `2px solid ${theme.gridLine}`, 'important')
+      }
     })
-  }
+  }, [theme.gridLine])
+
+  // Debounced drawLines — verhindert Absturz bei schnellem Klicken
+  const scheduleDraw = useCallback(() => {
+    if (drawTimer.current) clearTimeout(drawTimer.current)
+    drawTimer.current = setTimeout(drawLines, 80)
+  }, [drawLines])
 
   useEffect(() => {
-    const t = setTimeout(drawLines, 150)
-    return () => clearTimeout(t)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme.gridLine])
+    scheduleDraw()
+    return () => { if (drawTimer.current) clearTimeout(drawTimer.current) }
+  }, [scheduleDraw])
 
   function handleDateClick(arg: DateClickArg) {
     const start = new Date(arg.date)
@@ -86,6 +95,7 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
 
   function handleEventClick(arg: EventClickArg) {
     if (dragging.current) return
+    if (arg.event.display === 'background') return
     const ev = arg.event
     setModal({
       mode: 'edit',
@@ -148,7 +158,6 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
 
   return (
     <>
-      {/* CSS-Variablen für Theme live setzen */}
       <style>{`
         :root {
           --cal-accent: ${theme.accent};
@@ -175,13 +184,14 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
           slotDuration="00:30:00"
           slotMinTime="00:00:00"
           slotMaxTime="24:00:00"
-          events={[...toFcEvents(events), ...TIME_BLOCKS]}
+          events={[...toFcEvents(events), ...HOLIDAYS]}
           editable
           droppable
           selectable
           nowIndicator
+          eventDragMinDistance={10}
           scrollTime="07:00:00"
-          datesSet={() => setTimeout(drawLines, 50)}
+          datesSet={scheduleDraw}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
           eventDrop={handleDrop}

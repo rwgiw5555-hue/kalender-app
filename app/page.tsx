@@ -58,7 +58,12 @@ export default function Home() {
   function applyTheme(t: CalendarTheme) {
     setTheme(t)
     localStorage.setItem('cal-theme', JSON.stringify(t))
+    document.body.setAttribute('data-theme', t.slotBg.startsWith('#0') || t.slotBg.startsWith('#1') ? 'dark' : 'light')
   }
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme.slotBg.startsWith('#0') || theme.slotBg.startsWith('#1') ? 'dark' : 'light')
+  }, [theme.slotBg])
 
   const loadEvents = useCallback(async () => {
     const res = await fetch('/api/events')
