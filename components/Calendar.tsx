@@ -4,7 +4,7 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin, { DateClickArg, EventResizeDoneArg } from '@fullcalendar/interaction'
 import { EventClickArg, EventDropArg, EventInput } from '@fullcalendar/core'
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import EventModal, { EventFormData } from './EventModal'
 import { CalendarTheme } from './SettingsPanel'
 
@@ -57,8 +57,29 @@ function toLocalISO(d: Date) {
 
 export default function Calendar({ events, onRefresh, theme }: Props) {
   const calRef = useRef<FullCalendar>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
   const dragging = useRef(false)
+
+  // Vertikale Tageslinien per JS direkt ins DOM einzeichnen
+  useEffect(() => {
+    function drawLines() {
+      if (!containerRef.current) return
+      const cols = containerRef.current.querySelectorAll<HTMLElement>('.fc-timegrid-col')
+      cols.forEach((col, i) => {
+        if (i === 0) return
+        col.style.borderLeft = `2px solid ${theme.gridLine}`
+      })
+      const headerCells = containerRef.current.querySelectorAll<HTMLElement>('.fc-col-header-cell')
+      headerCells.forEach((cell, i) => {
+        if (i === 0) return
+        cell.style.borderLeft = `2px solid ${theme.gridLine}`
+      })
+    }
+    // Kurz warten bis FullCalendar gerendert hat
+    const t = setTimeout(drawLines, 100)
+    return () => clearTimeout(t)
+  }, [theme.gridLine])
 
   function handleDateClick(arg: DateClickArg) {
     const start = new Date(arg.date)
@@ -140,7 +161,7 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
         }
       `}</style>
 
-      <div className="flex-1 h-full overflow-hidden px-3 pt-2 pb-24">
+      <div ref={containerRef} className="flex-1 h-full overflow-hidden px-3 pt-2 pb-24">
         <FullCalendar
           ref={calRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
