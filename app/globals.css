@@ -88,6 +88,13 @@ body {
 .fc-theme-standard td, .fc-theme-standard th {
   border-color: var(--cal-grid) !important;
 }
+/* Vertikale Tageslinien explizit auf Zeitraster-Spalten und Header */
+.fc .fc-timegrid-col {
+  border-right: 1px solid var(--cal-grid) !important;
+}
+.fc .fc-col-header-cell {
+  border-right: 1px solid var(--cal-grid) !important;
+}
 /* Zeitachsen-Spalte rechts abgrenzen */
 .fc .fc-timegrid-axis {
   border-right: 2px solid var(--cal-grid) !important;
