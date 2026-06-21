@@ -88,19 +88,18 @@ body {
 .fc-theme-standard td, .fc-theme-standard th {
   border-color: var(--cal-grid) !important;
 }
-/* Vertikale Tages-Trennlinie durchgehend und dicker */
-.fc .fc-timegrid-col {
-  border-left: 2px solid color-mix(in srgb, var(--cal-grid) 220%, transparent) !important;
-}
-.fc .fc-timegrid-col:first-child {
-  border-left: none !important;
-}
-/* Spalten im Header genauso trennen */
+/* Vertikale Tages-Trennlinie — durchgehend Header + Zeitraster */
+.fc .fc-timegrid-col,
 .fc .fc-col-header-cell {
-  border-left: 2px solid color-mix(in srgb, var(--cal-grid) 220%, transparent) !important;
+  border-left: 1.5px solid var(--cal-grid) !important;
 }
+.fc .fc-timegrid-col:first-child,
 .fc .fc-col-header-cell:first-child {
   border-left: none !important;
+}
+/* Zeitachsen-Spalte (links mit Uhrzeiten) keine Linie */
+.fc .fc-timegrid-axis {
+  border-right: 1.5px solid var(--cal-grid) !important;
 }
 /* Tageszeit-Zonen Label links in der Zeitachse */
 .fc .fc-timegrid-slot-label[data-time="06:00:00"] .fc-timegrid-slot-label-cushion::after { content: " ☀️"; }
