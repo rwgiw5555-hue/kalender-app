@@ -58,25 +58,6 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
   const dragging = useRef(false)
   const drawTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // MutationObserver: reagiert sofort wenn FullCalendar Inline-Styles setzt
-  useEffect(() => {
-    if (!containerRef.current) return
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach(m => {
-        const el = m.target as HTMLElement
-        if (el.classList.contains('fc-timegrid-slot-lane') || el.classList.contains('fc-col-header-cell')) {
-          el.style.setProperty('border-right', `1px solid ${theme.gridLine}`, 'important')
-        }
-      })
-    })
-    observer.observe(containerRef.current, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['style'],
-    })
-    return () => observer.disconnect()
-  }, [theme.gridLine])
-
   const scheduleDraw = useCallback(() => {
     if (drawTimer.current) clearTimeout(drawTimer.current)
     drawTimer.current = setTimeout(() => {}, 80)
