@@ -26,7 +26,7 @@ export const PRESETS: { label: string; theme: CalendarTheme }[] = [
   },
   {
     label: 'Dunkel',
-    theme: { accent: '#60a5fa', slotBg: '#1e1e2e', slotAltBg: '#16213e', gridLine: '#2d2d44' },
+    theme: { accent: '#60a5fa', slotBg: '#1e1e2e', slotAltBg: '#16213e', gridLine: '#4a4a6a' },
   },
 ]
 
