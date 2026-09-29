@@ -1,15 +1,37 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { parseId, readJson, validateEvent } from '@/lib/validation'
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const body = await req.json()
-  const event = await prisma.event.update({ where: { id: Number(id) }, data: body })
+  const id = parseId((await params).id)
+  if (id === null) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 })
+
+  const body = await readJson(req)
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return NextResponse.json({ error: 'Ungültige Daten' }, { status: 400 })
+  }
+
+  const existing = await prisma.event.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Termin nicht gefunden' }, { status: 404 })
+
+  // Teiländerungen (z. B. Verschieben per Drag & Drop) mit dem gespeicherten Stand zusammenführen
+  const result = validateEvent({
+    ...existing,
+    startTime: existing.startTime.toISOString(),
+    endTime: existing.endTime.toISOString(),
+    ...body,
+  })
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 })
+
+  const event = await prisma.event.update({ where: { id }, data: result.data })
   return NextResponse.json(event)
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  await prisma.event.delete({ where: { id: Number(id) } })
+  const id = parseId((await params).id)
+  if (id === null) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 })
+
+  const { count } = await prisma.event.deleteMany({ where: { id } })
+  if (count === 0) return NextResponse.json({ error: 'Termin nicht gefunden' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }
