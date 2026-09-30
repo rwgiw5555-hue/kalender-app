@@ -1,5 +1,7 @@
 # Roadmap
 
+Anleitungen: [Server einrichten](SERVER.md) · [Siri-Kurzbefehl](SIRI.md)
+
 Ziel: ein eigener Tagesplaner mit festen Routinen, Aufgaben zum Abhaken und
 Sprachbedienung, der auf dem iPhone läuft. Termine bleiben privat und gehen an keine
 Dritten außer den bewusst gewählten (siehe [Datenschutz](#datenschutz)).

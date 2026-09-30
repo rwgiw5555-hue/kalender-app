@@ -1,37 +1,74 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState, useSyncExternalStore } from 'react'
 
 interface Props {
   onEventCreated: () => void
 }
+
+// Minimal-Typen für die Web Speech API (nicht in den TypeScript-Standardtypen)
+interface Recognition {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onend: (() => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  start(): void
+  stop(): void
+}
+type RecognitionConstructor = new () => Recognition
+
+function getRecognition(): RecognitionConstructor | null {
+  if (typeof window === 'undefined') return null
+  const w = window as unknown as {
+    SpeechRecognition?: RecognitionConstructor
+    webkitSpeechRecognition?: RecognitionConstructor
+    navigator: { standalone?: boolean }
+  }
+  // In einer vom iPhone-Homescreen gestarteten Web-App blockiert iOS die Erkennung;
+  // dort die Diktier-Taste der Tastatur nutzen
+  if (w.navigator.standalone) return null
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+}
+
+const noSubscribe = () => () => {}
 
 export default function NaturalInput({ onEventCreated }: Props) {
   const [text, setText] = useState('')
   const [listening, setListening] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [speechSupported, setSpeechSupported] = useState(true)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null)
-
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition
-    if (!SR) { setSpeechSupported(false); return }
-    const rec = new SR()
-    rec.lang = 'de-DE'
-    rec.continuous = false
-    rec.interimResults = false
-    rec.onresult = (e: any) => setText(e.results[0][0].transcript)
-    rec.onend = () => setListening(false)
-    recognitionRef.current = rec
-  }, [])
+  const [blocked, setBlocked] = useState(false)
+  const available = useSyncExternalStore(noSubscribe, () => getRecognition() !== null, () => false)
+  const speechSupported = available && !blocked
+  const recognitionRef = useRef<Recognition | null>(null)
 
   function toggleMic() {
-    if (!recognitionRef.current) return
-    if (listening) { recognitionRef.current.stop() }
-    else { recognitionRef.current.start(); setListening(true) }
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+    if (!recognitionRef.current) {
+      const SR = getRecognition()
+      if (!SR) return
+      const rec = new SR()
+      rec.lang = 'de-DE'
+      rec.continuous = false
+      rec.interimResults = false
+      rec.onresult = e => setText(e.results[0][0].transcript)
+      rec.onend = () => setListening(false)
+      rec.onerror = e => {
+        setListening(false)
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          setBlocked(true)
+          setError('Mikrofon nicht verfügbar – nutze die Diktier-Taste der Tastatur')
+        }
+      }
+      recognitionRef.current = rec
+    }
+    setError('')
+    recognitionRef.current.start()
+    setListening(true)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -45,20 +82,21 @@ export default function NaturalInput({ onEventCreated }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       })
-      if (!parseRes.ok) throw new Error('Parsing fehlgeschlagen')
-      const parsed = await parseRes.json()
+      const parsed = await parseRes.json().catch(() => null)
+      if (!parseRes.ok) throw new Error(parsed?.error ?? 'Termin nicht erkannt')
 
       const saveRes = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(parsed),
       })
-      if (!saveRes.ok) throw new Error('Speichern fehlgeschlagen')
+      if (!saveRes.ok) throw new Error((await saveRes.json().catch(() => null))?.error ?? 'Speichern fehlgeschlagen')
 
       setText('')
       onEventCreated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler')
+      // fetch wirft TypeError bei fehlender Verbindung (Meldung sonst englisch)
+      setError(err instanceof TypeError ? 'Keine Verbindung zum Kalender' : err instanceof Error ? err.message : 'Fehler')
     } finally {
       setLoading(false)
     }
@@ -77,26 +115,27 @@ export default function NaturalInput({ onEventCreated }: Props) {
         {error && <p className="absolute left-0 -bottom-5 text-xs text-red-500">{error}</p>}
       </div>
 
-      <button
-        type="button"
-        onClick={toggleMic}
-        disabled={!speechSupported}
-        title={speechSupported ? (listening ? 'Aufnahme stoppen' : 'Spracherkennung starten') : 'Spracherkennung nicht unterstützt'}
-        className={`p-2.5 rounded-xl border transition-colors shadow-sm ${
-          !speechSupported
-            ? 'border-gray-200 text-gray-300 cursor-not-allowed bg-white'
-            : listening
-            ? 'border-red-300 bg-red-50 text-red-500'
-            : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-        }`}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="9" y="2" width="6" height="12" rx="3"/>
-          <path d="M5 10a7 7 0 0 0 14 0"/>
-          <line x1="12" y1="19" x2="12" y2="22"/>
-          <line x1="9" y1="22" x2="15" y2="22"/>
-        </svg>
-      </button>
+      {/* Ohne Browser-Spracherkennung (z. B. iPhone-Homescreen-App) bleibt die Diktier-Taste der Tastatur */}
+      {speechSupported && (
+        <button
+          type="button"
+          onClick={toggleMic}
+          aria-label={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
+          title={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
+          className={`p-2.5 rounded-xl border transition-colors shadow-sm ${
+            listening
+              ? 'border-red-300 bg-red-50 text-red-500'
+              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+          }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="2" width="6" height="12" rx="3"/>
+            <path d="M5 10a7 7 0 0 0 14 0"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="9" y1="22" x2="15" y2="22"/>
+          </svg>
+        </button>
+      )}
 
       <button
         type="submit"
