@@ -1,0 +1,33 @@
+# systemd-Dienst für die Kalender-App. Installation siehe docs/SERVER.md.
+[Unit]
+Description=Kalender-App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kalender
+Group=kalender
+WorkingDirectory=/opt/kalender
+EnvironmentFile=/etc/kalender.env
+Environment=NODE_ENV=production
+# Lauscht nur auf 127.0.0.1 (siehe package.json); erreichbar nur über tailscale serve
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+# Absicherung: der Dienst darf nur seine Datenbank und den Next.js-Cache beschreiben
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/kalender /opt/kalender/.next
+
+[Install]
+WantedBy=multi-user.target

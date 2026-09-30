@@ -1,0 +1,13 @@
+[Unit]
+Description=Sicherung der Kalender-Datenbank
+
+[Service]
+Type=oneshot
+User=kalender
+Group=kalender
+ExecStart=/opt/kalender/deploy/backup.sh
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/kalender
