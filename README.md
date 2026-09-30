@@ -9,8 +9,10 @@ eigenen PC oder einem privaten Server und ist fürs iPhone als Homescreen-App ge
 - **Mein Tag** (`/heute`): Termine des Tages, Schritte der Routinen und Aufgaben zum
   Abhaken, fürs Handy gemacht.
 - **Spracheingabe:** „Morgen 14 Uhr Zahnarzt“ oder „Jeden Montag 18 Uhr aufräumen“ wird
-  über die Claude API zu einem Termin. Auf dem iPhone per Diktier-Taste oder
-  Siri-Kurzbefehl.
+  über die Claude API zu einem Vorschlag, den du vor dem Speichern prüfst und bearbeitest.
+  Mit dem Schalter „KI darf Termine sehen“ (Einstellungen, Standard aus) versteht sie
+  auch „verschieb den Zahnarzt auf Freitag“ oder „Zahnarzt absagen“. Auf dem iPhone per
+  Diktier-Taste oder Siri-Kurzbefehl.
 
 ## Starten auf dem PC
 

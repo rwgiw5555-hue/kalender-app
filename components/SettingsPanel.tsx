@@ -1,4 +1,5 @@
 'use client'
+import { setAiContext, useAiContext } from '@/lib/client'
 
 export interface CalendarTheme {
   accent: string
@@ -37,6 +38,7 @@ interface Props {
 }
 
 export default function SettingsPanel({ theme, onChange, onClose }: Props) {
+  const aiContext = useAiContext()
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -81,6 +83,25 @@ export default function SettingsPanel({ theme, onChange, onClose }: Props) {
           <span className="text-sm text-gray-600">Eigene Farbe wählen</span>
           <span className="ml-auto text-xs text-gray-400 font-mono">{theme.accent}</span>
         </div>
+
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mt-6 mb-3">Spracheingabe</p>
+        <label className="flex items-start gap-3 px-4 py-3 rounded-xl border border-gray-100 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={aiContext}
+            onChange={e => setAiContext(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-blue-500"
+          />
+          <span className="text-sm text-gray-700">
+            KI darf Termine sehen
+            <span className="block text-xs text-gray-400 mt-1">
+              Damit kann die Spracheingabe bestehende Termine ändern oder löschen („verschieb den Zahnarzt auf Freitag“).
+              Dafür gehen Titel und Zeiten deiner Termine von 2 Wochen zurück bis 2 Monate voraus an die Claude API
+              (Anthropic: kein Training, keine Weitergabe, bis zu 30 Tage gespeichert). Beschreibungen nie.
+              Gilt nur für dieses Gerät.
+            </span>
+          </span>
+        </label>
       </div>
     </div>
   )

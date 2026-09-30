@@ -10,6 +10,7 @@ import EventModal, { EventFormData } from './EventModal'
 import { CalendarTheme } from './SettingsPanel'
 import { getHolidaysForRange } from '@/lib/holidays'
 import { parseRecurrence } from '@/lib/recurrence'
+import { alertSaveError } from '@/lib/client'
 
 const CATEGORY_COLORS: Record<string, string> = {
   Arbeit: '#3b82f6',
@@ -37,10 +38,6 @@ interface Props {
 
 const HOLIDAYS = getHolidaysForRange(2024, 2027)
 
-export async function alertSaveError(res: Response) {
-  const body = await res.json().catch(() => null)
-  window.alert(`Speichern fehlgeschlagen: ${body?.error ?? res.statusText}`)
-}
 
 function pad(n: number) { return String(n).padStart(2, '0') }
 function toLocalISO(d: Date) {

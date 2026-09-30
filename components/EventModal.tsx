@@ -18,6 +18,10 @@ interface Props {
   onSave: (data: EventFormData) => void
   onDelete?: () => void
   onClose: () => void
+  // Für Vorschläge der Spracheingabe: Überschrift, Erklärung und bisheriger Stand
+  heading?: string
+  note?: string
+  previous?: string
 }
 
 const CATEGORIES = ['Arbeit', 'Privat', 'Sport', 'Sonstiges']
@@ -27,7 +31,7 @@ function toLocal(iso: string) {
   return iso.slice(0, 16)
 }
 
-export default function EventModal({ mode, initial, onSave, onDelete, onClose }: Props) {
+export default function EventModal({ mode, initial, onSave, onDelete, onClose, heading, note, previous }: Props) {
   const titleRef = useRef<HTMLInputElement>(null)
   const initialRule = initial.rrule ?? null
   const [repeat, setRepeat] = useState(presetKey(initialRule))
@@ -69,8 +73,14 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose }:
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-gray-900 mb-5">
-          {mode === 'create' ? 'Neuer Termin' : 'Termin bearbeiten'}
+          {heading ?? (mode === 'create' ? 'Neuer Termin' : 'Termin bearbeiten')}
         </h2>
+        {(note || previous) && (
+          <div className="-mt-3 mb-5 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            {note && <p>{note}</p>}
+            {previous && <p className="mt-1 text-xs text-blue-700">Bisher: {previous}</p>}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
