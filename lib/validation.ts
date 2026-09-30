@@ -14,10 +14,14 @@ export interface EventInput {
 
 type Result = { ok: true; data: EventInput } | { ok: false; error: string }
 
+const MIN_DATE = Date.UTC(1970, 0, 1)
+const MAX_DATE = Date.UTC(2100, 0, 1)
+
 function toDate(value: unknown): Date | null {
-  if (typeof value !== 'string' && typeof value !== 'number') return null
+  if (typeof value !== 'string') return null
   const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d
+  const t = d.getTime()
+  return Number.isNaN(t) || t < MIN_DATE || t > MAX_DATE ? null : d
 }
 
 // Übernimmt nur bekannte Felder (kein id, createdAt o. Ä. aus dem Request).
@@ -58,7 +62,10 @@ export function validateEvent(body: unknown): Result {
   return { ok: true, data: { title, description, startTime, endTime, category, color } }
 }
 
+// Nur echte JSON-Anfragen: Ein fremdes Formular oder text/plain-POST von einer
+// anderen Webseite kann diesen Header nicht ohne CORS-Vorabprüfung setzen.
 export async function readJson(req: Request): Promise<unknown> {
+  if (!req.headers.get('content-type')?.toLowerCase().startsWith('application/json')) return undefined
   try {
     return await req.json()
   } catch {
@@ -66,6 +73,10 @@ export async function readJson(req: Request): Promise<unknown> {
   }
 }
 
+const MAX_ID = 2147483647
+
 export function parseId(id: string): number | null {
-  return /^\d+$/.test(id) ? Number(id) : null
+  if (!/^\d{1,10}$/.test(id)) return null
+  const n = Number(id)
+  return n >= 1 && n <= MAX_ID ? n : null
 }

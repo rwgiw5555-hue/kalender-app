@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { parseId, readJson, validateEvent } from '@/lib/validation'
+import { rejectForeign } from '@/lib/request-guard'
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = rejectForeign(req)
+  if (denied) return denied
   const id = parseId((await params).id)
   if (id === null) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 })
 
@@ -27,7 +30,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   return NextResponse.json(event)
 }
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = rejectForeign(req)
+  if (denied) return denied
   const id = parseId((await params).id)
   if (id === null) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 })
 
