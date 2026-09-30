@@ -3,11 +3,14 @@
 Persönlicher Kalender mit Routinen, Aufgaben zum Abhaken und Spracheingabe. Läuft auf dem
 eigenen PC oder einem privaten Server und ist fürs iPhone als Homescreen-App gedacht.
 
-- **Kalender** (`/`): Woche, Monat, Tag. Termine per Klick, Drag & Drop oder Dialog.
+- **Drei Stile** zum Auswählen (Einstellungen): A „Klar & ruhig“ (hell), B „Dunkel & fokussiert“,
+  C „Farbig & freundlich“, jeweils mit eigener Akzentfarbe.
+- **Kalender** (`/`): Woche, Monat, Tag. Am PC mit Seitenleiste (Schnelleingabe, Mini-Monat,
+  „Mein Tag“ zum Abhaken), auf dem Handy mit Tab-Leiste. Termine per Klick, Drag & Drop oder Dialog.
 - **Routinen:** Termine mit Wiederholung (täglich, werktags, wöchentlich, alle 2 Wochen,
   monatlich, jährlich, optional mit Enddatum).
-- **Mein Tag** (`/heute`): Termine des Tages, Schritte der Routinen und Aufgaben zum
-  Abhaken, fürs Handy gemacht.
+- **Mein Tag** (`/heute`): Fortschritt, Termine des Tages, Schritte der Routinen und Aufgaben
+  zum Abhaken; auf dem Handy einspaltig, am PC zweispaltig.
 - **Spracheingabe:** „Morgen 14 Uhr Zahnarzt“ oder „Jeden Montag 18 Uhr aufräumen“ wird
   über die Claude API zu einem Vorschlag, den du vor dem Speichern prüfst und bearbeitest.
   Mit dem Schalter „KI darf Termine sehen“ (Einstellungen, Standard aus) versteht sie

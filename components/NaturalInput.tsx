@@ -1,6 +1,7 @@
 'use client'
 import { useRef, useState, useSyncExternalStore } from 'react'
 import EventModal, { EventFormData } from './EventModal'
+import Icon from './Icon'
 import { alertSaveError, useAiContext } from '@/lib/client'
 import { describeRecurrence, Recurrence } from '@/lib/recurrence'
 import { TIME_ZONE } from '@/lib/dates'
@@ -167,7 +168,7 @@ export default function NaturalInput({ onChanged }: Props) {
             onChange={e => setText(e.target.value)}
             placeholder={withCalendar ? 'Termin eintragen oder ändern, z. B. „Zahnarzt auf Freitag verschieben“' : 'Termin eintragen, z. B. „Zahnarzt morgen 14 Uhr“'}
             disabled={loading}
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+            className="w-full h-12 bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.75)] px-4 text-[15px] focus:outline-none focus:border-accent"
           />
         </div>
 
@@ -178,30 +179,25 @@ export default function NaturalInput({ onChanged }: Props) {
             onClick={toggleMic}
             aria-label={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
             title={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
-            className={`p-2.5 rounded-xl border transition-colors shadow-sm ${
-              listening
-                ? 'border-red-300 bg-red-50 text-red-500'
-                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+            className={`w-12 h-12 shrink-0 rounded-[calc(var(--app-radius)*0.75)] flex items-center justify-center transition-colors ${
+              listening ? 'bg-danger text-on-danger animate-pulse' : 'bg-accent text-on-accent hover:opacity-90'
             }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="2" width="6" height="12" rx="3"/>
-              <path d="M5 10a7 7 0 0 0 14 0"/>
-              <line x1="12" y1="19" x2="12" y2="22"/>
-              <line x1="9" y1="22" x2="15" y2="22"/>
-            </svg>
+            <Icon name="mic" size={22} />
           </button>
         )}
 
         <button
           type="submit"
           disabled={loading || !text.trim()}
-          className="px-4 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors shadow-sm disabled:opacity-40"
+          aria-label="Hinzufügen"
+          title="Hinzufügen"
+          className="w-12 h-12 shrink-0 rounded-[calc(var(--app-radius)*0.75)] bg-surface-2 text-ink flex items-center justify-center hover:bg-line transition-colors disabled:opacity-40"
         >
-          {loading ? '…' : 'Hinzufügen'}
+          {loading ? <span className="text-sm">…</span> : <Icon name="send" size={20} />}
         </button>
       </form>
-      {error && <p role="status" className="mt-2 text-xs text-red-600">{error}</p>}
+      {error && <p role="status" className="mt-2 text-xs text-danger">{error}</p>}
 
       {preview && preview.action !== 'delete' && (
         <EventModal
@@ -223,18 +219,18 @@ export default function NaturalInput({ onChanged }: Props) {
       )}
 
       {preview?.action === 'delete' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setPreview(null)}>
-          <div role="dialog" aria-label="Löschen bestätigen" className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Termin löschen?</h2>
-            {preview.message && <p className="text-sm text-gray-600 mb-2">{preview.message}</p>}
-            <p className="text-sm font-medium text-gray-900 bg-gray-50 rounded-xl px-4 py-3">{describe(preview.current)}</p>
-            {preview.current.rrule && <p className="text-xs text-gray-500 mt-2">Das löscht die ganze Serie mit allen Schritten.</p>}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setPreview(null)}>
+          <div role="dialog" aria-label="Löschen bestätigen" className="bg-surface text-ink rounded-[var(--app-radius)] shadow-2xl w-full max-w-md mx-4 p-6 animate-scale-in" onClick={e => e.stopPropagation()}>
+            <h2 className="font-head text-lg font-bold mb-3">Termin löschen?</h2>
+            {preview.message && <p className="text-sm text-muted mb-2">{preview.message}</p>}
+            <p className="text-sm font-semibold bg-surface-2 rounded-[calc(var(--app-radius)*0.6)] px-4 py-3">{describe(preview.current)}</p>
+            {preview.current.rrule && <p className="text-xs text-muted mt-2">Das löscht die ganze Serie mit allen Schritten.</p>}
             <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setPreview(null)} className="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100">Abbrechen</button>
+              <button onClick={() => setPreview(null)} className="h-11 px-4 rounded-[calc(var(--app-radius)*0.6)] text-sm font-semibold text-muted hover:bg-surface-2">Abbrechen</button>
               <button
                 onClick={() => confirm(() => fetch(`/api/events/${preview.eventId}`, { method: 'DELETE' }))}
               disabled={saving}
-                className="px-5 py-2 rounded-xl text-sm bg-red-500 text-white hover:bg-red-600 font-medium"
+                className="h-11 px-5 rounded-[calc(var(--app-radius)*0.6)] text-sm bg-danger text-on-danger hover:opacity-90 font-semibold"
               >
                 Löschen
               </button>

@@ -67,18 +67,18 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-scale-in"
+        className="bg-surface text-ink rounded-[var(--app-radius)] shadow-2xl max-h-[90vh] overflow-y-auto w-full max-w-md mx-4 p-6 animate-scale-in"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-gray-900 mb-5">
+        <h2 className="font-head text-lg font-bold mb-5">
           {heading ?? (mode === 'create' ? 'Neuer Termin' : 'Termin bearbeiten')}
         </h2>
         {(note || previous) && (
-          <div className="-mt-3 mb-5 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <div className="-mt-3 mb-5 rounded-[calc(var(--app-radius)*0.6)] bg-accent-soft px-4 py-3 text-sm text-ink">
             {note && <p>{note}</p>}
-            {previous && <p className="mt-1 text-xs text-blue-700">Bisher: {previous}</p>}
+            {previous && <p className="mt-1 text-xs text-muted">Bisher: {previous}</p>}
           </div>
         )}
 
@@ -90,7 +90,7 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
               defaultValue={initial.title ?? ''}
               placeholder="Titel"
               required
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.6)] px-4 py-2.5 text-sm focus:outline-none focus:border-accent"
             />
           </div>
           <div>
@@ -99,28 +99,28 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
               defaultValue={initial.description ?? ''}
               placeholder="Beschreibung (optional)"
               rows={2}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.6)] px-4 py-2.5 text-sm focus:outline-none focus:border-accent resize-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Start</label>
+              <label className="text-xs font-semibold text-muted mb-1 block">Start</label>
               <input
                 name="startTime"
                 type="datetime-local"
                 defaultValue={toLocal(initial.startTime ?? '')}
                 required
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.6)] px-3 py-2 text-sm focus:outline-none focus:border-accent"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Ende</label>
+              <label className="text-xs font-semibold text-muted mb-1 block">Ende</label>
               <input
                 name="endTime"
                 type="datetime-local"
                 defaultValue={toLocal(initial.endTime ?? '')}
                 required
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.6)] px-3 py-2 text-sm focus:outline-none focus:border-accent"
               />
             </div>
           </div>
@@ -128,7 +128,7 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
             <select
               name="category"
               defaultValue={initial.category ?? 'Sonstiges'}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.6)] px-4 py-2.5 text-sm focus:outline-none focus:border-accent"
             >
               {CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
@@ -136,11 +136,11 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Wiederholen</label>
+              <label className="text-xs font-semibold text-muted mb-1 block">Wiederholen</label>
               <select
                 value={repeat}
                 onChange={e => setRepeat(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.6)] px-3 py-2 text-sm focus:outline-none focus:border-accent"
               >
                 {PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 {initialRule && presetKey(initialRule) === 'custom' && (
@@ -150,12 +150,12 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
             </div>
             {repeat !== 'none' && (
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">Bis (optional)</label>
+                <label className="text-xs font-semibold text-muted mb-1 block">Bis (optional)</label>
                 <input
                   name="until"
                   type="date"
                   defaultValue={initialRule?.until ?? ''}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.6)] px-3 py-2 text-sm focus:outline-none focus:border-accent"
                 />
               </div>
             )}
@@ -166,7 +166,7 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
               <button
                 type="button"
                 onClick={onDelete}
-                className="px-4 py-2 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors"
+                className="h-11 px-4 rounded-[calc(var(--app-radius)*0.6)] text-sm font-semibold text-danger hover:bg-surface-2 transition-colors"
               >
                 Löschen
               </button>
@@ -175,13 +175,13 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100 transition-colors"
+              className="h-11 px-4 rounded-[calc(var(--app-radius)*0.6)] text-sm font-semibold text-muted hover:bg-surface-2 transition-colors"
             >
               Abbrechen
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl text-sm bg-blue-500 text-white hover:bg-blue-600 transition-colors font-medium"
+              className="h-11 px-5 rounded-[calc(var(--app-radius)*0.6)] text-sm bg-accent text-on-accent hover:opacity-90 transition-opacity font-semibold"
             >
               Speichern
             </button>
