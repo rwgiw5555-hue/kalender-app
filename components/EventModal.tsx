@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { PRESETS, Recurrence, describeRecurrence, presetKey } from '@/lib/recurrence'
 
 export interface EventFormData {
   id?: number
@@ -8,6 +9,7 @@ export interface EventFormData {
   startTime: string
   endTime: string
   category: string
+  rrule: Recurrence | null
 }
 
 interface Props {
@@ -27,6 +29,8 @@ function toLocal(iso: string) {
 
 export default function EventModal({ mode, initial, onSave, onDelete, onClose }: Props) {
   const titleRef = useRef<HTMLInputElement>(null)
+  const initialRule = initial.rrule ?? null
+  const [repeat, setRepeat] = useState(presetKey(initialRule))
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -34,6 +38,15 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose }:
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
+
+  function buildRule(key: string, until: string | null): Recurrence | null {
+    const base = key === 'custom' ? initialRule : PRESETS.find(p => p.key === key)?.rule ?? null
+    if (!base) return null
+    const rule: Recurrence = { ...base }
+    delete rule.until
+    if (until) rule.until = until
+    return rule
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -45,6 +58,7 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose }:
       startTime: new Date(fd.get('startTime') as string).toISOString(),
       endTime: new Date(fd.get('endTime') as string).toISOString(),
       category: fd.get('category') as string,
+      rrule: buildRule(repeat, fd.get('until') as string | null),
     })
   }
 
@@ -108,6 +122,33 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose }:
             >
               {CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Wiederholen</label>
+              <select
+                value={repeat}
+                onChange={e => setRepeat(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                {initialRule && presetKey(initialRule) === 'custom' && (
+                  <option value="custom">{describeRecurrence(initialRule)}</option>
+                )}
+              </select>
+            </div>
+            {repeat !== 'none' && (
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Bis (optional)</label>
+                <input
+                  name="until"
+                  type="date"
+                  defaultValue={initialRule?.until ?? ''}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 pt-2">

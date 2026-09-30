@@ -15,5 +15,6 @@ model Event {
   endTime     DateTime
   category    String?
   color       String?
+  rrule       String?
   createdAt   DateTime @default(now())
 }

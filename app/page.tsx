@@ -12,6 +12,7 @@ export interface DbEvent {
   endTime: string
   category?: string | null
   color?: string | null
+  rrule?: string | null
 }
 
 const DEFAULT_THEME = PRESETS[0].theme

@@ -1,3 +1,5 @@
+import { parseRecurrence, serializeRecurrence } from './recurrence'
+
 export const CATEGORIES = ['Arbeit', 'Privat', 'Sport', 'Sonstiges'] as const
 
 const MAX_TITLE = 200
@@ -10,6 +12,7 @@ export interface EventInput {
   endTime: Date
   category: string
   color: string | null
+  rrule: string | null
 }
 
 type Result = { ok: true; data: EventInput } | { ok: false; error: string }
@@ -59,7 +62,14 @@ export function validateEvent(body: unknown): Result {
     color = b.color
   }
 
-  return { ok: true, data: { title, description, startTime, endTime, category, color } }
+  const recurrence = parseRecurrence(b.rrule)
+  if (!recurrence.ok) return { ok: false, error: 'Ungültige Wiederholung' }
+  if (recurrence.value?.until && Date.parse(recurrence.value.until + 'T23:59:59Z') < startTime.getTime()) {
+    return { ok: false, error: 'Wiederholung endet vor dem Start' }
+  }
+  const rrule = serializeRecurrence(recurrence.value)
+
+  return { ok: true, data: { title, description, startTime, endTime, category, color, rrule } }
 }
 
 // Nur echte JSON-Anfragen: Ein fremdes Formular oder text/plain-POST von einer

@@ -2,12 +2,14 @@
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
+import rrulePlugin from '@fullcalendar/rrule'
 import interactionPlugin, { DateClickArg, EventResizeDoneArg } from '@fullcalendar/interaction'
 import { EventClickArg, EventDropArg, EventInput } from '@fullcalendar/core'
 import { useRef, useState, useEffect, useCallback } from 'react'
 import EventModal, { EventFormData } from './EventModal'
 import { CalendarTheme } from './SettingsPanel'
 import { getHolidaysForRange } from '@/lib/holidays'
+import { parseRecurrence } from '@/lib/recurrence'
 
 const CATEGORY_COLORS: Record<string, string> = {
   Arbeit: '#3b82f6',
@@ -24,6 +26,7 @@ interface DbEvent {
   endTime: string
   category?: string | null
   color?: string | null
+  rrule?: string | null
 }
 
 interface Props {
@@ -34,21 +37,35 @@ interface Props {
 
 const HOLIDAYS = getHolidaysForRange(2024, 2027)
 
-function toFcEvents(events: DbEvent[]): EventInput[] {
-  return events.map(e => ({
-    id: String(e.id),
-    title: e.title,
-    start: e.startTime,
-    end: e.endTime,
-    backgroundColor: e.color ?? CATEGORY_COLORS[e.category ?? 'Sonstiges'] ?? '#8b5cf6',
-    borderColor: 'transparent',
-    extendedProps: { description: e.description, category: e.category },
-  }))
-}
-
 function pad(n: number) { return String(n).padStart(2, '0') }
 function toLocalISO(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function toFcEvents(events: DbEvent[]): EventInput[] {
+  return events.map(e => {
+    const base: EventInput = {
+      id: String(e.id),
+      title: e.title,
+      backgroundColor: e.color ?? CATEGORY_COLORS[e.category ?? 'Sonstiges'] ?? '#8b5cf6',
+      borderColor: 'transparent',
+      extendedProps: { description: e.description, category: e.category, seriesStart: e.startTime, seriesEnd: e.endTime, rrule: null },
+    }
+    const recurrence = parseRecurrence(e.rrule)
+    if (!recurrence.ok || !recurrence.value) return { ...base, start: e.startTime, end: e.endTime }
+
+    // Routine: dtstart ohne Zeitzone, damit FullCalendar die Wochentage in lokaler Zeit rechnet
+    const start = new Date(e.startTime)
+    const { until, ...rule } = recurrence.value
+    return {
+      ...base,
+      rrule: { ...rule, dtstart: toLocalISO(start), ...(until ? { until: `${until}T23:59` } : {}) },
+      duration: { milliseconds: Math.max(new Date(e.endTime).getTime() - start.getTime(), 0) },
+      // Einzelne Vorkommen nicht verschieben: das würde die ganze Serie versetzen
+      editable: false,
+      extendedProps: { ...base.extendedProps, rrule: recurrence.value },
+    }
+  })
 }
 
 export default function Calendar({ events, onRefresh, theme }: Props) {
@@ -73,15 +90,20 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
     if (dragging.current) return
     if (arg.event.display === 'background') return
     const ev = arg.event
+    const rrule = ev.extendedProps.rrule ?? null
+    // Bei Routinen die Serie bearbeiten, nicht das angeklickte Vorkommen
+    const start = rrule ? new Date(ev.extendedProps.seriesStart) : ev.start!
+    const end = rrule ? new Date(ev.extendedProps.seriesEnd) : ev.end ?? new Date(ev.start!.getTime() + 3600000)
     setModal({
       mode: 'edit',
       initial: {
         id: Number(ev.id),
         title: ev.title,
         description: ev.extendedProps.description ?? '',
-        startTime: toLocalISO(ev.start!),
-        endTime: toLocalISO(ev.end ?? new Date(ev.start!.getTime() + 3600000)),
+        startTime: toLocalISO(start),
+        endTime: toLocalISO(end),
         category: ev.extendedProps.category ?? 'Sonstiges',
+        rrule,
       }
     })
   }
@@ -112,13 +134,13 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
       await fetch(`/api/events/${data.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: data.title, description: data.description, startTime: data.startTime, endTime: data.endTime, category: data.category }),
+        body: JSON.stringify({ title: data.title, description: data.description, startTime: data.startTime, endTime: data.endTime, category: data.category, rrule: data.rrule }),
       })
     } else {
       await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: data.title, description: data.description, startTime: data.startTime, endTime: data.endTime, category: data.category }),
+        body: JSON.stringify({ title: data.title, description: data.description, startTime: data.startTime, endTime: data.endTime, category: data.category, rrule: data.rrule }),
       })
     }
     setModal(null)
@@ -146,7 +168,7 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
       <div ref={containerRef} className="flex-1 h-full overflow-hidden px-3 pt-2 pb-24">
         <FullCalendar
           ref={calRef}
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, rrulePlugin]}
           initialView="timeGridWeek"
           locale="de"
           firstDay={1}
