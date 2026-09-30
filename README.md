@@ -14,11 +14,11 @@ eigenen PC oder einem privaten Server und ist fürs iPhone als Homescreen-App ge
 
 ## Starten auf dem PC
 
-Voraussetzung: [Node.js](https://nodejs.org) 22 oder neuer.
+Voraussetzung: [Node.js](https://nodejs.org) 22.12 oder neuer.
 
 ```bash
 npm install
-cp .env.example .env          # dann ANTHROPIC_API_KEY eintragen
+cp .env.example .env          # Windows: copy .env.example .env – dann ANTHROPIC_API_KEY eintragen
 npx prisma migrate deploy     # legt die Datenbank dev.db an bzw. bringt sie auf den neuen Stand
 npm run dev
 ```
@@ -36,7 +36,7 @@ Termine bleiben dabei erhalten.
 | `ANTHROPIC_API_KEY` | Schlüssel für die Claude API (Spracheingabe) |
 | `DATABASE_URL` | Pfad zur Datenbank, Standard `file:./dev.db` |
 | `ALLOWED_HOSTS` | Zusätzliche erlaubte Adressen, z. B. der Tailscale-Name des Servers |
-| `SHORTCUT_TOKEN` | Geheimer Schlüssel für den Siri-Kurzbefehl (leer = aus) |
+| `SHORTCUT_TOKEN` | Geheimer Schlüssel für den Siri-Kurzbefehl, mind. 32 Zeichen (leer oder kürzer = aus) |
 
 `.env` und die Datenbank werden nie ins Repo übernommen.
 

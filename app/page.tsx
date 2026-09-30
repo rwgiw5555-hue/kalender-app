@@ -21,7 +21,7 @@ const DEFAULT_THEME = PRESETS[0].theme
 const THEME_VERSION = '2'
 
 const THEME_EVENT = 'cal-theme-change'
-const HEX = /^#[0-9a-fA-F]{3,8}$/
+const HEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/
 
 // Gespeichertes Theme als Text (stabil für useSyncExternalStore)
 function readStoredTheme(): string | null {
