@@ -1,6 +1,8 @@
 // Wiederholungsregeln für Routinen. Gespeichert als JSON-Text im Feld Event.rrule,
 // angezeigt über @fullcalendar/rrule. Wird von Client und Server genutzt.
 
+import { dayNumber, isDateString } from './dates'
+
 export const FREQS = ['daily', 'weekly', 'monthly', 'yearly'] as const
 export const WEEKDAYS = ['mo', 'tu', 'we', 'th', 'fr', 'sa', 'su'] as const
 
@@ -51,11 +53,7 @@ export function parseRecurrence(input: unknown): ParseResult {
   }
 
   if (r.until != null) {
-    if (typeof r.until !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.until)) return { ok: false }
-    const t = Date.parse(r.until + 'T00:00:00Z')
-    if (Number.isNaN(t) || t < Date.UTC(1970, 0, 1) || t > Date.UTC(2100, 0, 1)) return { ok: false }
-    // Unmögliche Daten wie 2026-11-31 nicht still auf den Folgetag schieben
-    if (new Date(t).toISOString().slice(0, 10) !== r.until) return { ok: false }
+    if (!isDateString(r.until)) return { ok: false }
     value.until = r.until
   }
 
@@ -93,8 +91,42 @@ const DAY_NAMES: Record<Weekday, string> = { mo: 'Mo', tu: 'Di', we: 'Mi', th: '
 
 export function describeRecurrence(r: Recurrence): string {
   const n = r.interval ?? 1
+  if (presetKey({ ...r, until: undefined }) === 'weekdays') return 'Werktags'
   const unit = { daily: ['Täglich', 'Tage'], weekly: ['Wöchentlich', 'Wochen'], monthly: ['Monatlich', 'Monate'], yearly: ['Jährlich', 'Jahre'] }[r.freq]
   let text = n === 1 ? unit[0] : `Alle ${n} ${unit[1]}`
   if (r.byweekday?.length) text += ` (${r.byweekday.map(d => DAY_NAMES[d]).join(', ')})`
   return text
+}
+
+// Findet die Serie mit Beginn am Tag `start` (YYYY-MM-DD) auch am Tag `date` statt?
+// Tagesgenau und ohne Zeitzonen, passend zu dem, was @fullcalendar/rrule anzeigt
+// (Wochen beginnen am Montag).
+export function occursOn(rule: Recurrence, start: string, date: string): boolean {
+  if (date < start) return false
+  if (rule.until && date > rule.until) return false
+  const interval = rule.interval ?? 1
+  const s = new Date(start + 'T00:00:00Z')
+  const d = new Date(date + 'T00:00:00Z')
+
+  switch (rule.freq) {
+    case 'daily':
+      return (dayNumber(date) - dayNumber(start)) % interval === 0
+    case 'weekly': {
+      const weekday = WEEKDAYS[(d.getUTCDay() + 6) % 7]
+      const days = rule.byweekday ?? [WEEKDAYS[(s.getUTCDay() + 6) % 7]]
+      if (!days.includes(weekday)) return false
+      // Montag der jeweiligen Woche; 1970-01-01 war ein Donnerstag
+      const monday = (n: number) => n - ((n + 3) % 7)
+      const weeks = (monday(dayNumber(date)) - monday(dayNumber(start))) / 7
+      return weeks % interval === 0
+    }
+    case 'monthly': {
+      if (d.getUTCDate() !== s.getUTCDate()) return false
+      const months = (d.getUTCFullYear() - s.getUTCFullYear()) * 12 + d.getUTCMonth() - s.getUTCMonth()
+      return months % interval === 0
+    }
+    case 'yearly':
+      return d.getUTCMonth() === s.getUTCMonth() && d.getUTCDate() === s.getUTCDate()
+        && (d.getUTCFullYear() - s.getUTCFullYear()) % interval === 0
+  }
 }

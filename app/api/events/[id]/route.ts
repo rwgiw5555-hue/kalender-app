@@ -36,7 +36,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const id = parseId((await params).id)
   if (id === null) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 })
 
-  const { count } = await prisma.event.deleteMany({ where: { id } })
+  // Schritte der Routine und ihre Haken mit löschen (nicht auf SQLite-Kaskade verlassen)
+  const [, , { count }] = await prisma.$transaction([
+    prisma.taskCompletion.deleteMany({ where: { task: { eventId: id } } }),
+    prisma.task.deleteMany({ where: { eventId: id } }),
+    prisma.event.deleteMany({ where: { id } }),
+  ])
   if (count === 0) return NextResponse.json({ error: 'Termin nicht gefunden' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }

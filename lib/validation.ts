@@ -1,3 +1,4 @@
+import { localDate } from './dates'
 import { parseRecurrence, serializeRecurrence } from './recurrence'
 
 export const CATEGORIES = ['Arbeit', 'Privat', 'Sport', 'Sonstiges'] as const
@@ -16,11 +17,6 @@ export interface EventInput {
 }
 
 type Result = { ok: true; data: EventInput } | { ok: false; error: string }
-
-// Kalenderdatum in deutscher Zeit (YYYY-MM-DD), so wie der Kalender es anzeigt
-function localDate(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(d)
-}
 
 const MIN_DATE = Date.UTC(1970, 0, 1)
 const MAX_DATE = Date.UTC(2100, 0, 1)

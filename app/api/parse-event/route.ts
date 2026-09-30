@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { CATEGORIES, readJson, validateEvent } from '@/lib/validation'
 import { rejectForeign } from '@/lib/request-guard'
+import { TIME_ZONE } from '@/lib/dates'
 
 const client = new Anthropic()
 
 const MAX_TEXT = 500
-const TIME_ZONE = 'Europe/Berlin'
 
 function nowInBerlin() {
   return new Intl.DateTimeFormat('de-DE', {

@@ -17,4 +17,31 @@ model Event {
   color       String?
   rrule       String?
   createdAt   DateTime @default(now())
+  steps       Task[]
+}
+
+// Aufgabe zum Abhaken. Entweder eigenständig (optional mit Datum und
+// Wiederholung) oder als Schritt einer Routine (eventId gesetzt).
+model Task {
+  id          Int              @id @default(autoincrement())
+  title       String
+  date        String?          // YYYY-MM-DD: fällig ab / Beginn der Wiederholung
+  rrule       String?          // gleiche Regeln wie bei Terminen
+  eventId     Int?
+  event       Event?           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  position    Int              @default(0)
+  createdAt   DateTime         @default(now())
+  completions TaskCompletion[]
+
+  @@index([eventId])
+}
+
+// Erledigt-Haken pro Tag. Bei wiederkehrenden Aufgaben gilt er nur für diesen Tag.
+model TaskCompletion {
+  id     Int    @id @default(autoincrement())
+  taskId Int
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  date   String // YYYY-MM-DD
+
+  @@unique([taskId, date])
 }
