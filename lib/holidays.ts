@@ -32,41 +32,40 @@ export interface Holiday {
   title: string
   start: string
   allDay: true
-  display: 'background'
-  backgroundColor: string
+  display: 'block'
+  editable: false
   classNames: string[]
 }
 
 export function getHolidays(year: number): Holiday[] {
   const easter = easterSunday(year)
-  const color = 'rgba(96,165,250,0.15)'
 
   const fixed = [
-    { title: '🎉 Neujahr', date: new Date(year, 0, 1) },
-    { title: '✝️ Heilige Drei Könige', date: new Date(year, 0, 6) },  // SA
-    { title: '🌸 Tag der Arbeit', date: new Date(year, 4, 1) },
-    { title: '🇩🇪 Tag der Deutschen Einheit', date: new Date(year, 9, 3) },
-    { title: '⛪ Reformationstag', date: new Date(year, 9, 31) },       // SA
-    { title: '🎄 1. Weihnachtstag', date: new Date(year, 11, 25) },
-    { title: '🎄 2. Weihnachtstag', date: new Date(year, 11, 26) },
+    { title: 'Neujahr', date: new Date(year, 0, 1) },
+    { title: 'Heilige Drei Könige', date: new Date(year, 0, 6) },  // SA
+    { title: 'Tag der Arbeit', date: new Date(year, 4, 1) },
+    { title: 'Tag der Deutschen Einheit', date: new Date(year, 9, 3) },
+    { title: 'Reformationstag', date: new Date(year, 9, 31) },       // SA
+    { title: '1. Weihnachtstag', date: new Date(year, 11, 25) },
+    { title: '2. Weihnachtstag', date: new Date(year, 11, 26) },
   ]
 
   const movable = [
-    { title: '✝️ Karfreitag', date: addDays(easter, -2) },
-    { title: '🐣 Ostersonntag', date: easter },
-    { title: '🐣 Ostermontag', date: addDays(easter, 1) },
-    { title: '✝️ Christi Himmelfahrt', date: addDays(easter, 39) },
-    { title: '🕊️ Pfingstsonntag', date: addDays(easter, 49) },
-    { title: '🕊️ Pfingstmontag', date: addDays(easter, 50) },
+    { title: 'Karfreitag', date: addDays(easter, -2) },
+    { title: 'Ostersonntag', date: easter },
+    { title: 'Ostermontag', date: addDays(easter, 1) },
+    { title: 'Christi Himmelfahrt', date: addDays(easter, 39) },
+    { title: 'Pfingstsonntag', date: addDays(easter, 49) },
+    { title: 'Pfingstmontag', date: addDays(easter, 50) },
   ]
 
   return [...fixed, ...movable].map(h => ({
     title: h.title,
     start: fmt(h.date),
     allDay: true as const,
-    display: 'background' as const,
-    backgroundColor: color,
-    classNames: ['fc-holiday'],
+    display: 'block' as const,
+    editable: false as const,
+    classNames: ['cal-holiday'],
   }))
 }
 

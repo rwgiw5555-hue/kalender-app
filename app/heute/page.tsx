@@ -1,334 +1,189 @@
 'use client'
-import Link from 'next/link'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useState } from 'react'
+import AppShell from '@/components/AppShell'
+import Icon from '@/components/Icon'
+import MiniMonth from '@/components/MiniMonth'
 import NaturalInput from '@/components/NaturalInput'
-import { addDays, localDate, TIME_ZONE } from '@/lib/dates'
-import { describeRecurrence, occursOn, parseRecurrence, PRESETS } from '@/lib/recurrence'
-import type { DayTask } from '@/lib/tasks'
+import ProgressRing from '@/components/ProgressRing'
+import TaskList from '@/components/TaskList'
+import { addDays } from '@/lib/dates'
+import { DayEvent, timeFmt, useDay, useToday } from '@/lib/day'
+import { getHolidays } from '@/lib/holidays'
+import { describeRecurrence, parseRecurrence, PRESETS } from '@/lib/recurrence'
+import { categoryColors, usePalette } from '@/lib/theme'
 
-interface DbEvent {
-  id: number
-  title: string
-  startTime: string
-  endTime: string
-  category?: string | null
-  color?: string | null
-  rrule?: string | null
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  Arbeit: '#3b82f6',
-  Privat: '#10b981',
-  Sport: '#f59e0b',
-  Sonstiges: '#8b5cf6',
-}
-
-const timeFmt = new Intl.DateTimeFormat('de-DE', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit' })
 const dayFmt = new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
 
-interface DayEvent extends DbEvent {
-  label: string // Uhrzeit, „bis 10:00“ oder „ganztags“ bei mehrtägigen Terminen
-  sortKey: string
-}
-
-// Termine an `day`: Serien über occursOn, einmalige Termine an jedem Tag,
-// über den sie reichen (Ende um 0:00 zählt zum Vortag)
-function eventsOnDay(events: DbEvent[], day: string): DayEvent[] {
-  const result: DayEvent[] = []
-  for (const e of events) {
-    const start = new Date(e.startTime)
-    const end = new Date(e.endTime)
-    const startDay = localDate(start)
-    const startTime = timeFmt.format(start)
-    const rule = parseRecurrence(e.rrule)
-    if (rule.ok && rule.value) {
-      if (occursOn(rule.value, startDay, day)) result.push({ ...e, label: startTime, sortKey: startTime })
-      continue
-    }
-    const endTime = timeFmt.format(end)
-    const endDay = endTime === '00:00' && end > start ? addDays(localDate(end), -1) : localDate(end)
-    if (day < startDay || day > endDay) continue
-    if (day === startDay) result.push({ ...e, label: startTime, sortKey: startTime })
-    else if (day === endDay && endTime !== '00:00') result.push({ ...e, label: `bis ${endTime}`, sortKey: '00:00' })
-    else result.push({ ...e, label: 'ganztags', sortKey: '' })
-  }
-  return result.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-}
-
-async function send(url: string, method: string, body?: unknown) {
-  const res = await fetch(url, {
-    method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const data = await res.json().catch(() => null)
-    throw new Error(data?.error ?? 'Fehler beim Speichern')
-  }
-  return res.json()
-}
-
-function loadAccent(): string {
-  try {
-    const saved = localStorage.getItem('cal-theme')
-    const accent = saved ? JSON.parse(saved).accent : null
-    return typeof accent === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(accent) ? accent : '#3b82f6'
-  } catch {
-    return '#3b82f6'
-  }
-}
-
-const noSubscribe = () => () => {}
-// Jede Minute neu prüfen, damit „heute“ nach Mitternacht weiterspringt
-const everyMinute = (cb: () => void) => {
-  const id = setInterval(cb, 60000)
-  return () => clearInterval(id)
-}
-
-const LOAD_ERROR = 'Daten konnten nicht geladen werden'
-
-async function getJson(url: string) {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error()
-  return res.json()
-}
-
 export default function Heute() {
-  // Datum und Farbe erst im Browser bestimmen (auf dem Server null),
-  // damit vorgerenderte Seite und Browser nicht auseinanderlaufen
-  const today = useSyncExternalStore(everyMinute, () => localDate(new Date()), () => null)
-  const accent = useSyncExternalStore(noSubscribe, loadAccent, () => '#3b82f6')
+  const today = useToday()
   const [selected, setDay] = useState<string | null>(null)
   const day = selected ?? today
-  const [events, setEvents] = useState<DbEvent[]>([])
-  const [tasks, setTasks] = useState<DayTask[]>([])
-  const [error, setError] = useState('')
-  const [version, setVersion] = useState(0)
-  const [pending, setPending] = useState<Set<number>>(new Set())
-  const load = () => setVersion(v => v + 1)
-
-  useEffect(() => {
-    if (!day) return
-    let cancelled = false
-    Promise.all([
-      getJson('/api/events'),
-      getJson(`/api/tasks?date=${day}`),
-    ])
-      .then(([ev, ts]) => {
-        if (cancelled) return
-        setEvents(ev)
-        setTasks(ts)
-        setError(e => (e === LOAD_ERROR ? '' : e))
-      })
-      .catch(() => { if (!cancelled) setError(LOAD_ERROR) })
-    return () => { cancelled = true }
-  }, [day, version])
-
-  async function run(action: () => Promise<unknown>) {
-    setError('')
-    try {
-      await action()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Fehler')
-    }
-    load()
-  }
-
-  // Pro Aufgabe nur eine Anfrage gleichzeitig, damit Doppelklicks sich nicht überholen
-  async function toggle(task: DayTask) {
-    if (pending.has(task.id)) return
-    setPending(p => new Set(p).add(task.id))
-    setTasks(ts => ts.map(t => (t.id === task.id ? { ...t, done: !t.done } : t)))
-    await run(() => send(`/api/tasks/${task.id}/done`, 'PUT', { date: day, done: !task.done }))
-    setPending(p => {
-      const next = new Set(p)
-      next.delete(task.id)
-      return next
-    })
-  }
+  const data = useDay(day)
+  const palette = usePalette()
 
   // Ist der gewählte Tag heute, folgt die Ansicht „heute“ (auch über Mitternacht)
   function go(d: string) {
     setDay(d === today ? null : d)
   }
 
-  if (!day || !today) return null
+  const sidebar = day && today ? (
+    <MiniMonth today={today} selected={day} onSelect={go} />
+  ) : null
 
-  const dayEvents = eventsOnDay(events, day)
+  if (!day || !today) return <AppShell active="heute">{null}</AppShell>
+
+  const { dayEvents, tasks, pending } = data
   const steps = (eventId: number) => tasks.filter(t => t.eventId === eventId)
   const looseTasks = tasks.filter(t => t.eventId === null)
-  const openCount = tasks.filter(t => !t.done).length
+  const doneCount = tasks.filter(t => t.done).length
+  const holiday = getHolidays(Number(day.slice(0, 4))).find(h => h.start === day)
+
+  // „Als Nächstes“: erster offener Schritt einer Routine, sonst der nächste Termin, sonst eine Aufgabe
+  const now = timeFmt.format(new Date())
+  const nextStep = dayEvents.flatMap(e => steps(e.id)).find(t => !t.done)
+  const nextEvent = day === today ? dayEvents.find(e => e.sortKey >= now) : undefined
+  const nextTask = looseTasks.find(t => !t.done)
+  const next = nextStep ? nextStep.title : nextEvent ? `${nextEvent.label} ${nextEvent.title}` : nextTask?.title
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
-      <div className="max-w-lg mx-auto px-4 pb-16">
-        <header className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur pt-4 pb-3">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="text-sm font-medium px-3 py-2 -ml-3 rounded-xl hover:bg-gray-100" style={{ color: accent }}>
-              ‹ Kalender
-            </Link>
-            {day !== today && (
-              <button onClick={() => setDay(null)} className="text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-100" style={{ color: accent }}>
-                Heute
+    <AppShell active="heute" sidebar={sidebar}>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-lg lg:max-w-5xl mx-auto px-4 lg:px-8 pb-10">
+          <header className="sticky top-0 z-10 bg-bg/95 backdrop-blur pt-5 pb-3 lg:pt-8">
+            <div className="flex items-center justify-between gap-2">
+              <button type="button" onClick={() => go(addDays(day, -1))} aria-label="Vorheriger Tag" className="w-11 h-11 rounded-full bg-surface text-ink flex items-center justify-center hover:bg-surface-2">
+                <Icon name="left" size={20} />
               </button>
-            )}
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <button onClick={() => go(addDays(day, -1))} aria-label="Vorheriger Tag" className="w-11 h-11 rounded-full text-2xl text-gray-400 hover:bg-gray-100">‹</button>
-            <div className="text-center">
-              <h1 className="text-xl font-semibold text-gray-900">{dayFmt.format(new Date(day + 'T12:00:00Z'))}</h1>
-              <p className="text-xs text-gray-400">{openCount === 0 ? 'Alles erledigt' : `${openCount} offen`}</p>
+              <div className="text-center min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wider text-accent h-4">
+                  {day === today ? 'Heute' : day === addDays(today, 1) ? 'Morgen' : day === addDays(today, -1) ? 'Gestern' : ''}
+                </p>
+                <h1 className="font-head text-xl lg:text-2xl font-bold truncate">{dayFmt.format(new Date(day + 'T12:00:00Z'))}</h1>
+                {holiday && <p className="text-xs text-muted mt-0.5">{holiday.title}</p>}
+              </div>
+              <button type="button" onClick={() => go(addDays(day, 1))} aria-label="Nächster Tag" className="w-11 h-11 rounded-full bg-surface text-ink flex items-center justify-center hover:bg-surface-2">
+                <Icon name="right" size={20} />
+              </button>
             </div>
-            <button onClick={() => go(addDays(day, 1))} aria-label="Nächster Tag" className="w-11 h-11 rounded-full text-2xl text-gray-400 hover:bg-gray-100">›</button>
+            {day !== today && (
+              <div className="flex justify-center mt-2">
+                <button type="button" onClick={() => setDay(null)} className="text-sm font-semibold text-accent px-3 py-1.5 rounded-full hover:bg-surface">
+                  Zurück zu heute
+                </button>
+              </div>
+            )}
+          </header>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-4 mt-2">
+            <div className="flex items-center gap-4 bg-surface rounded-[var(--app-radius)] px-4 py-3.5 shadow-sm">
+              <ProgressRing done={doneCount} total={tasks.length} />
+              <div className="min-w-0">
+                <p className="font-head text-lg font-bold">
+                  {tasks.length === 0 ? 'Nichts zu erledigen' : doneCount === tasks.length ? 'Alles erledigt' : `${doneCount} von ${tasks.length} erledigt`}
+                </p>
+                {next && <p className="text-sm text-muted truncate">Als Nächstes: {next}</p>}
+              </div>
+            </div>
+            <div className="bg-surface rounded-[var(--app-radius)] px-4 py-3.5 shadow-sm flex flex-col justify-center">
+              <NaturalInput onChanged={data.reload} />
+            </div>
           </div>
-        </header>
-        <div className="mt-1">
-          <NaturalInput onChanged={load} />
+
+          {data.error && (
+            <p role="alert" className="mt-4 text-sm text-danger bg-surface rounded-[var(--app-radius)] px-4 py-3">{data.error}</p>
+          )}
+
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] mt-7">
+            <section aria-labelledby="termine">
+              <h2 id="termine" className="text-xs font-bold uppercase tracking-wider text-muted mb-3">Termine</h2>
+              {dayEvents.length === 0 && <p className="text-sm text-muted">Keine Termine</p>}
+              <ul className="flex flex-col gap-3">
+                {dayEvents.map(e => (
+                  <EventCard
+                    key={e.id}
+                    event={e}
+                    colors={categoryColors(palette, e.category)}
+                    tinted={palette.tintedCards}
+                    steps={steps(e.id)}
+                    pending={pending}
+                    onToggle={data.toggle}
+                    onDelete={t => data.deleteTask(t.id)}
+                    onAddStep={title => data.addStep(e.id, title, steps(e.id).length)}
+                  />
+                ))}
+              </ul>
+            </section>
+
+            <section aria-labelledby="aufgaben">
+              <h2 id="aufgaben" className="text-xs font-bold uppercase tracking-wider text-muted mb-3">Aufgaben</h2>
+              <div className={`bg-surface rounded-[var(--app-radius)] px-4 py-3 ${palette.tintedCards ? '' : 'border border-line'}`}>
+                {looseTasks.length === 0 && <p className="text-sm text-muted py-2">Keine Aufgaben für diesen Tag</p>}
+                <TaskList
+                  tasks={looseTasks}
+                  pending={pending}
+                  onToggle={data.toggle}
+                  onDelete={t => data.deleteTask(t.id)}
+                  onAdd={(title, repeat) => data.addTask(
+                    title,
+                    PRESETS.find(p => p.key === repeat)?.rule ?? null,
+                    repeat !== 'none' || day !== today ? day : null,
+                  )}
+                  placeholder="Aufgabe hinzufügen"
+                  withRepeat
+                />
+              </div>
+            </section>
+          </div>
         </div>
-
-        {error && (
-          <p role="alert" className="mt-4 text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{error}</p>
-        )}
-
-        <section className="mt-6">
-          <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Termine</h2>
-          {dayEvents.length === 0 && <p className="text-sm text-gray-400">Keine Termine</p>}
-          <ul className="space-y-3">
-            {dayEvents.map(e => {
-              const rule = parseRecurrence(e.rrule)
-              const eventSteps = steps(e.id)
-              const color = e.color ?? CATEGORY_COLORS[e.category ?? 'Sonstiges'] ?? '#8b5cf6'
-              return (
-                <li key={e.id} className="bg-white rounded-2xl shadow-sm border-l-4 px-4 py-3" style={{ borderColor: color }}>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-sm font-semibold tabular-nums text-gray-500 min-w-11">{e.label}</span>
-                    <span className="font-medium text-gray-900 flex-1">{e.title}</span>
-                  </div>
-                  {rule.ok && rule.value && (
-                    <p className="text-xs text-gray-400 mt-0.5 ml-14">{describeRecurrence(rule.value)}</p>
-                  )}
-                  {/* Schritte bei Routinen immer, bei einmaligen Terminen nur wenn vorhanden */}
-                  {(rule.ok && rule.value || eventSteps.length > 0) && (
-                    <TaskList
-                      tasks={eventSteps}
-                      accent={accent}
-                      pending={pending}
-                      onToggle={toggle}
-                      onDelete={t => run(() => send(`/api/tasks/${t.id}`, 'DELETE'))}
-                      onAdd={title => run(() => send('/api/tasks', 'POST', { title, eventId: e.id, position: eventSteps.length }))}
-                      placeholder="Schritt hinzufügen"
-                    />
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-
-        <section className="mt-8">
-          <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Aufgaben</h2>
-          <div className="bg-white rounded-2xl shadow-sm px-4 py-2">
-            <TaskList
-              tasks={looseTasks}
-              accent={accent}
-              pending={pending}
-              onToggle={toggle}
-              onDelete={t => run(() => send(`/api/tasks/${t.id}`, 'DELETE'))}
-              onAdd={(title, repeat) => run(() => send('/api/tasks', 'POST', {
-                title,
-                rrule: PRESETS.find(p => p.key === repeat)?.rule ?? null,
-                date: repeat !== 'none' || day !== today ? day : null,
-              }))}
-              placeholder="Aufgabe hinzufügen"
-              withRepeat
-            />
-          </div>
-        </section>
       </div>
-    </div>
+    </AppShell>
   )
 }
 
-interface TaskListProps {
-  tasks: DayTask[]
-  accent: string
+interface EventCardProps {
+  event: DayEvent
+  colors: { color: string; soft: string }
+  tinted: boolean
+  steps: ReturnType<typeof useDay>['tasks']
   pending: Set<number>
-  onToggle: (t: DayTask) => void
-  onDelete: (t: DayTask) => void
-  onAdd: (title: string, repeat: string) => void
-  placeholder: string
-  withRepeat?: boolean
+  onToggle: ReturnType<typeof useDay>['toggle']
+  onDelete: (t: ReturnType<typeof useDay>['tasks'][number]) => void
+  onAddStep: (title: string) => void
 }
 
-function TaskList({ tasks, accent, pending, onToggle, onDelete, onAdd, placeholder, withRepeat }: TaskListProps) {
-  const [title, setTitle] = useState('')
-  const [repeat, setRepeat] = useState('none')
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!title.trim()) return
-    onAdd(title.trim(), repeat)
-    setTitle('')
-    setRepeat('none')
-  }
-
+function EventCard({ event, colors, tinted, steps, pending, onToggle, onDelete, onAddStep }: EventCardProps) {
+  const rule = parseRecurrence(event.rrule)
+  const recurring = rule.ok && rule.value
+  const color = event.color ?? colors.color
+  const doneSteps = steps.filter(s => s.done).length
   return (
-    <div className="mt-1">
-      <ul>
-        {tasks.map(t => (
-          <li key={t.id} className="group flex items-center gap-3 min-h-11">
-            <button
-              onClick={() => onToggle(t)}
-              disabled={pending.has(t.id)}
-              role="checkbox"
-              aria-checked={t.done}
-              aria-label={t.title}
-              className="w-7 h-7 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors"
-              style={t.done ? { backgroundColor: accent, borderColor: accent } : { borderColor: '#d1d5db' }}
-            >
-              {t.done && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              )}
-            </button>
-            <span className={`flex-1 text-sm ${t.done ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-              {t.title}
-              {t.rrule && <span className="ml-2 text-xs text-gray-400">{describeRecurrence(t.rrule)}</span>}
-              {t.overdue && <span className="ml-2 text-xs text-red-500">seit {t.date?.split('-').reverse().join('.')}</span>}
-            </span>
-            <button
-              onClick={() => onDelete(t)}
-              aria-label={`${t.title} löschen`}
-              className="w-9 h-9 shrink-0 rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={submit} className="flex items-center gap-2 py-2">
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder={placeholder}
-          maxLength={200}
-          className="flex-1 min-w-0 text-sm px-3 py-2 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        {withRepeat && (
-          <select
-            value={repeat}
-            onChange={e => setRepeat(e.target.value)}
-            aria-label="Wiederholen"
-            className="text-sm px-2 py-2 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {PRESETS.map(p => <option key={p.key} value={p.key}>{p.key === 'none' ? 'Einmal' : p.label}</option>)}
-          </select>
+    <li className="flex gap-3">
+      <span className={`w-14 shrink-0 pt-4 font-head font-semibold text-muted tabular-nums ${event.label.length > 5 ? 'text-xs' : 'text-sm'}`}>{event.label}</span>
+      <div
+        className={`flex-1 min-w-0 rounded-[var(--app-radius)] px-4 py-3.5 ${tinted ? '' : 'bg-surface border border-line'}`}
+        style={tinted ? { background: event.color ? `color-mix(in srgb, ${event.color} 14%, var(--app-surface))` : colors.soft } : undefined}
+      >
+        <div className="flex items-start gap-2.5">
+          <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-[7px]" style={{ background: color }} />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-ink">{event.title}</p>
+            {recurring && (
+              <p className="flex items-center gap-1.5 text-sm text-muted">
+                <Icon name="repeat" size={14} />
+                {describeRecurrence(rule.value!)}
+              </p>
+            )}
+          </div>
+          {steps.length > 0 && (
+            <span className="text-xs font-semibold text-muted tabular-nums mt-1">{doneSteps}/{steps.length}</span>
+          )}
+        </div>
+        {(recurring || steps.length > 0) && (
+          <div className="mt-2">
+            <TaskList tasks={steps} pending={pending} onToggle={onToggle} onDelete={onDelete} onAdd={title => onAddStep(title)} placeholder="Schritt hinzufügen" />
+          </div>
         )}
-        <button type="submit" disabled={!title.trim()} className="px-3 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40" style={{ backgroundColor: accent }}>
-          +
-        </button>
-      </form>
-    </div>
+      </div>
+    </li>
   )
 }
