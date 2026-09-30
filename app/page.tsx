@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import CalendarView, { alertSaveError } from '@/components/Calendar'
 import EventModal, { EventFormData } from '@/components/EventModal'
 import SettingsPanel, { CalendarTheme, PRESETS } from '@/components/SettingsPanel'
@@ -20,19 +20,41 @@ const DEFAULT_THEME = PRESETS[0].theme
 
 const THEME_VERSION = '2'
 
-function loadTheme(): CalendarTheme {
-  if (typeof window === 'undefined') return DEFAULT_THEME
+const THEME_EVENT = 'cal-theme-change'
+const HEX = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/
+
+// Gespeichertes Theme als Text (stabil für useSyncExternalStore)
+function readStoredTheme(): string | null {
   try {
     // Versionsprüfung — bei neuer Version altes Theme verwerfen
     if (localStorage.getItem('cal-theme-version') !== THEME_VERSION) {
       localStorage.removeItem('cal-theme')
       localStorage.setItem('cal-theme-version', THEME_VERSION)
     }
-    const saved = localStorage.getItem('cal-theme')
-    return saved ? JSON.parse(saved) : DEFAULT_THEME
+    return localStorage.getItem('cal-theme')
   } catch {
-    return DEFAULT_THEME
+    return null
   }
+}
+
+function subscribeTheme(cb: () => void) {
+  window.addEventListener(THEME_EVENT, cb)
+  window.addEventListener('storage', cb)
+  return () => {
+    window.removeEventListener(THEME_EVENT, cb)
+    window.removeEventListener('storage', cb)
+  }
+}
+
+// Nur gültige Farben übernehmen: die Werte landen direkt im CSS
+function parseTheme(raw: string | null): CalendarTheme {
+  try {
+    const t = raw ? JSON.parse(raw) : null
+    if (t && ['accent', 'slotBg', 'slotAltBg', 'gridLine'].every(k => typeof t[k] === 'string' && HEX.test(t[k]))) {
+      return { accent: t.accent, slotBg: t.slotBg, slotAltBg: t.slotAltBg, gridLine: t.gridLine }
+    }
+  } catch {}
+  return DEFAULT_THEME
 }
 
 function useClock() {
@@ -52,27 +74,32 @@ export default function Home() {
   const [events, setEvents] = useState<DbEvent[]>([])
   const [addModal, setAddModal] = useState(false)
   const [settings, setSettings] = useState(false)
-  const [theme, setTheme] = useState<CalendarTheme>(DEFAULT_THEME)
+  const storedTheme = useSyncExternalStore(subscribeTheme, readStoredTheme, () => null)
+  const theme = useMemo(() => parseTheme(storedTheme), [storedTheme])
   const clock = useClock()
 
-  useEffect(() => { setTheme(loadTheme()) }, [])
-
   function applyTheme(t: CalendarTheme) {
-    setTheme(t)
-    localStorage.setItem('cal-theme', JSON.stringify(t))
-    document.body.setAttribute('data-theme', t.slotBg.startsWith('#0') || t.slotBg.startsWith('#1') ? 'dark' : 'light')
+    try {
+      localStorage.setItem('cal-theme', JSON.stringify(t))
+    } catch {}
+    window.dispatchEvent(new Event(THEME_EVENT))
   }
 
   useEffect(() => {
     document.body.setAttribute('data-theme', theme.slotBg.startsWith('#0') || theme.slotBg.startsWith('#1') ? 'dark' : 'light')
   }, [theme.slotBg])
 
-  const loadEvents = useCallback(async () => {
-    const res = await fetch('/api/events')
-    if (res.ok) setEvents(await res.json())
-  }, [])
+  const [version, setVersion] = useState(0)
+  const loadEvents = () => setVersion(v => v + 1)
 
-  useEffect(() => { loadEvents() }, [loadEvents])
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/events')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (!cancelled && Array.isArray(data)) setEvents(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [version])
 
   async function handleSave(data: EventFormData) {
     const res = await fetch('/api/events', {
