@@ -5,7 +5,7 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import rrulePlugin from '@fullcalendar/rrule'
 import interactionPlugin, { DateClickArg, EventResizeDoneArg } from '@fullcalendar/interaction'
 import { EventClickArg, EventDropArg, EventInput } from '@fullcalendar/core'
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import EventModal, { EventFormData } from './EventModal'
 import { CalendarTheme } from './SettingsPanel'
 import { getHolidaysForRange } from '@/lib/holidays'
@@ -117,20 +117,31 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
     dragging.current = true
     setTimeout(() => { dragging.current = false }, 300)
     const end = arg.event.end ?? new Date(arg.event.start!.getTime() + 3600000)
-    await fetch(`/api/events/${arg.event.id}`, {
+    const res = await fetch(`/api/events/${arg.event.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startTime: arg.event.start!.toISOString(), endTime: end.toISOString() }),
-    })
+    }).catch(() => null)
+    // Bei Fehler Termin zurücksetzen und Grund zeigen, statt still zurückzuspringen
+    if (!res?.ok) {
+      arg.revert()
+      if (res) await alertSaveError(res)
+      else window.alert('Speichern fehlgeschlagen: keine Verbindung')
+    }
     onRefresh()
   }
 
   async function handleResize(arg: EventResizeDoneArg) {
-    await fetch(`/api/events/${arg.event.id}`, {
+    const res = await fetch(`/api/events/${arg.event.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startTime: arg.event.start!.toISOString(), endTime: arg.event.end!.toISOString() }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) {
+      arg.revert()
+      if (res) await alertSaveError(res)
+      else window.alert('Speichern fehlgeschlagen: keine Verbindung')
+    }
     onRefresh()
   }
 

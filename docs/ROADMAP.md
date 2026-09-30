@@ -2,6 +2,10 @@
 
 Anleitungen: [Server einrichten](SERVER.md) · [Siri-Kurzbefehl](SIRI.md)
 
+**Stand 30.09.2026:** Alle Stufen sind umgesetzt. Offen ist nur, was sich hier nicht testen
+ließ: Server tatsächlich einrichten, Siri-Kurzbefehl auf dem iPhone, Spracheingabe mit
+echtem API-Schlüssel.
+
 Ziel: ein eigener Tagesplaner mit festen Routinen, Aufgaben zum Abhaken und
 Sprachbedienung, der auf dem iPhone läuft. Termine bleiben privat und gehen an keine
 Dritten außer den bewusst gewählten (siehe [Datenschutz](#datenschutz)).
