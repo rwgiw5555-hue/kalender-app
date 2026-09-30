@@ -37,6 +37,11 @@ interface Props {
 
 const HOLIDAYS = getHolidaysForRange(2024, 2027)
 
+export async function alertSaveError(res: Response) {
+  const body = await res.json().catch(() => null)
+  window.alert(`Speichern fehlgeschlagen: ${body?.error ?? res.statusText}`)
+}
+
 function pad(n: number) { return String(n).padStart(2, '0') }
 function toLocalISO(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -130,19 +135,22 @@ export default function Calendar({ events, onRefresh, theme }: Props) {
   }
 
   async function handleSave(data: EventFormData) {
+    let res: Response
     if (modal?.mode === 'edit' && data.id) {
-      await fetch(`/api/events/${data.id}`, {
+      res = await fetch(`/api/events/${data.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: data.title, description: data.description, startTime: data.startTime, endTime: data.endTime, category: data.category, rrule: data.rrule }),
       })
     } else {
-      await fetch('/api/events', {
+      res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: data.title, description: data.description, startTime: data.startTime, endTime: data.endTime, category: data.category, rrule: data.rrule }),
       })
     }
+    // Bei Fehler Dialog offen lassen, damit die Eingabe nicht verloren geht
+    if (!res.ok) return alertSaveError(res)
     setModal(null)
     onRefresh()
   }

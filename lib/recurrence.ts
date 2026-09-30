@@ -31,8 +31,9 @@ export function parseRecurrence(input: unknown): ParseResult {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { ok: false }
   const r = raw as Record<string, unknown>
 
-  if (!(FREQS as readonly unknown[]).includes(r.freq)) return { ok: false }
-  const value: Recurrence = { freq: r.freq as Freq }
+  const freq = typeof r.freq === 'string' ? r.freq.toLowerCase() : r.freq
+  if (!(FREQS as readonly unknown[]).includes(freq)) return { ok: false }
+  const value: Recurrence = { freq: freq as Freq }
 
   if (r.interval != null && r.interval !== 1) {
     if (typeof r.interval !== 'number' || !Number.isInteger(r.interval) || r.interval < 1 || r.interval > 52) {
@@ -42,16 +43,19 @@ export function parseRecurrence(input: unknown): ParseResult {
   }
 
   if (r.byweekday != null) {
-    if (!Array.isArray(r.byweekday) || r.byweekday.length === 0) return { ok: false }
-    if (!r.byweekday.every(d => (WEEKDAYS as readonly unknown[]).includes(d))) return { ok: false }
-    // Sortiert und ohne Doppelte, damit gleiche Regeln gleich aussehen
-    value.byweekday = WEEKDAYS.filter(d => (r.byweekday as unknown[]).includes(d))
+    if (!Array.isArray(r.byweekday)) return { ok: false }
+    const days = r.byweekday.map(d => (typeof d === 'string' ? d.toLowerCase() : d))
+    if (!days.every(d => (WEEKDAYS as readonly unknown[]).includes(d))) return { ok: false }
+    // Sortiert und ohne Doppelte, damit gleiche Regeln gleich aussehen; leere Liste = keine Einschränkung
+    if (days.length) value.byweekday = WEEKDAYS.filter(d => days.includes(d))
   }
 
   if (r.until != null) {
     if (typeof r.until !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.until)) return { ok: false }
     const t = Date.parse(r.until + 'T00:00:00Z')
     if (Number.isNaN(t) || t < Date.UTC(1970, 0, 1) || t > Date.UTC(2100, 0, 1)) return { ok: false }
+    // Unmögliche Daten wie 2026-11-31 nicht still auf den Folgetag schieben
+    if (new Date(t).toISOString().slice(0, 10) !== r.until) return { ok: false }
     value.until = r.until
   }
 
