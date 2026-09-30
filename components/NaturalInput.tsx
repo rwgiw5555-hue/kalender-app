@@ -24,7 +24,7 @@ type Preview =
   | { action: 'delete'; message: string; eventId: number; current: ProposedEvent }
 
 const whenFmt = new Intl.DateTimeFormat('de-DE', {
-  timeZone: TIME_ZONE, weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  timeZone: TIME_ZONE, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 })
 const timeFmt = new Intl.DateTimeFormat('de-DE', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit' })
 
@@ -108,6 +108,7 @@ export default function NaturalInput({ onChanged }: Props) {
 
   const withCalendar = useAiContext()
   const [preview, setPreview] = useState<Preview | null>(null)
+  const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -134,7 +135,11 @@ export default function NaturalInput({ onChanged }: Props) {
   }
 
   async function confirm(request: () => Promise<Response>) {
+    // Doppelklick: nur eine Anfrage gleichzeitig
+    if (saving) return
+    setSaving(true)
     const res = await request().catch(() => null)
+    setSaving(false)
     if (!res) return window.alert('Speichern fehlgeschlagen: keine Verbindung')
     if (!res.ok) return alertSaveError(res)
     setPreview(null)
@@ -202,7 +207,9 @@ export default function NaturalInput({ onChanged }: Props) {
         <EventModal
           mode={preview.action === 'update' ? 'edit' : 'create'}
           heading={preview.action === 'update' ? 'Änderung prüfen' : 'Vorschlag prüfen'}
-          note={preview.message}
+          note={preview.action === 'update' && preview.current.rrule
+          ? `${preview.message} Achtung: Das ändert die ganze Serie, nicht nur einen Termin.`
+          : preview.message}
           previous={preview.action === 'update' ? describe(preview.current) : undefined}
           initial={{
           ...preview.event,
@@ -226,6 +233,7 @@ export default function NaturalInput({ onChanged }: Props) {
               <button onClick={() => setPreview(null)} className="px-4 py-2 rounded-xl text-sm text-gray-500 hover:bg-gray-100">Abbrechen</button>
               <button
                 onClick={() => confirm(() => fetch(`/api/events/${preview.eventId}`, { method: 'DELETE' }))}
+              disabled={saving}
                 className="px-5 py-2 rounded-xl text-sm bg-red-500 text-white hover:bg-red-600 font-medium"
               >
                 Löschen
