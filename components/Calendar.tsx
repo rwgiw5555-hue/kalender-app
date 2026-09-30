@@ -16,7 +16,8 @@ import type { DbEvent } from '@/lib/day'
 interface Props {
   events: DbEvent[]
   onRefresh: () => void
-  focusDate?: string | null // YYYY-MM-DD, z. B. aus dem Mini-Monat
+  // Sprungziel, z. B. aus dem Mini-Monat; `n` zählt hoch, damit auch derselbe Tag erneut springt
+  focus?: { date: string; n: number } | null
 }
 
 const HOLIDAYS = getHolidaysForRange(2024, 2030)
@@ -85,7 +86,7 @@ function dayHeader(arg: DayHeaderContentArg) {
   )
 }
 
-export default function Calendar({ events, onRefresh, focusDate }: Props) {
+export default function Calendar({ events, onRefresh, focus }: Props) {
   const calRef = useRef<FullCalendar>(null)
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
   const [view, setView] = useState({ title: '', type: 'timeGridWeek' })
@@ -97,8 +98,8 @@ export default function Calendar({ events, onRefresh, focusDate }: Props) {
   }, [])
 
   useEffect(() => {
-    if (focusDate) calRef.current?.getApi().gotoDate(focusDate)
-  }, [focusDate])
+    if (focus) calRef.current?.getApi().gotoDate(focus.date)
+  }, [focus])
 
   const api = () => calRef.current?.getApi()
 
@@ -182,11 +183,19 @@ export default function Calendar({ events, onRefresh, focusDate }: Props) {
     onRefresh()
   }
 
-  function newEventNow() {
-    const d = new Date()
-    d.setMinutes(0, 0, 0)
-    d.setHours(d.getHours() + 1)
-    openCreate(d)
+  // Neuer Termin: in der angezeigten Zeitspanne mit heute die nächste volle Stunde,
+  // sonst der erste angezeigte Tag um 9 Uhr
+  function newEvent() {
+    const now = new Date()
+    const v = api()?.view
+    if (v && (now < v.currentStart || now >= v.currentEnd)) {
+      const d = new Date(v.currentStart)
+      d.setHours(9, 0, 0, 0)
+      return openCreate(d)
+    }
+    now.setMinutes(0, 0, 0)
+    now.setHours(now.getHours() + 1)
+    openCreate(now)
   }
 
   return (
@@ -215,7 +224,7 @@ export default function Calendar({ events, onRefresh, focusDate }: Props) {
             </button>
           ))}
         </div>
-        <button type="button" onClick={newEventNow} className="h-9 pl-2.5 pr-3.5 rounded-full bg-accent text-on-accent text-sm font-semibold flex items-center gap-1.5 hover:opacity-90">
+        <button type="button" onClick={newEvent} className="h-9 pl-2.5 pr-3.5 rounded-full bg-accent text-on-accent text-sm font-semibold flex items-center gap-1.5 hover:opacity-90">
           <Icon name="plus" size={18} />
           <span className="hidden sm:inline">Neuer Termin</span>
           <span className="sm:hidden">Neu</span>

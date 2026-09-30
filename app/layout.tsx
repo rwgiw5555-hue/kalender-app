@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Figtree, Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
 import ThemeStyle from "@/components/ThemeStyle";
+import { STYLE_CSS, THEME_BOOT_SCRIPT } from "@/lib/palettes";
 import "./globals.css";
 
 // Schriften der drei Stile; next/font liefert sie vom eigenen Server aus (keine Google-Anfrage im Browser)
@@ -32,8 +33,15 @@ export default function RootLayout({
   return (
     <html
       lang="de"
+      data-style="A"
+      suppressHydrationWarning
       className={`${jakarta.variable} ${dmSans.variable} ${grotesk.variable} ${figtree.variable} h-full antialiased`}
     >
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: STYLE_CSS }} />
+        {/* Gespeicherten Stil vor dem ersten Zeichnen setzen (kein Aufblitzen) */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <ThemeStyle />
         {children}

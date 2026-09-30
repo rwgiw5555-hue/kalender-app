@@ -38,9 +38,11 @@ export default function Heute() {
   const doneCount = tasks.filter(t => t.done).length
   const holiday = getHolidays(Number(day.slice(0, 4))).find(h => h.start === day)
 
-  // „Als Nächstes“: erster offener Schritt einer Routine, sonst der nächste Termin, sonst eine Aufgabe
+  // „Als Nächstes“: offener Schritt eines Termins, der noch nicht vorbei ist, sonst der
+  // nächste Termin, sonst eine Aufgabe
   const now = timeFmt.format(new Date())
-  const nextStep = dayEvents.flatMap(e => steps(e.id)).find(t => !t.done)
+  const notOver = (e: DayEvent) => day !== today || timeFmt.format(new Date(e.endTime)) > now || e.sortKey === ''
+  const nextStep = dayEvents.filter(notOver).flatMap(e => steps(e.id)).find(t => !t.done)
   const nextEvent = day === today ? dayEvents.find(e => e.sortKey >= now) : undefined
   const nextTask = looseTasks.find(t => !t.done)
   const next = nextStep ? nextStep.title : nextEvent ? `${nextEvent.label} ${nextEvent.title}` : nextTask?.title
@@ -55,7 +57,7 @@ export default function Heute() {
                 <Icon name="left" size={20} />
               </button>
               <div className="text-center min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wider text-accent h-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-accent-ink h-4">
                   {day === today ? 'Heute' : day === addDays(today, 1) ? 'Morgen' : day === addDays(today, -1) ? 'Gestern' : ''}
                 </p>
                 <h1 className="font-head text-xl lg:text-2xl font-bold truncate">{dayFmt.format(new Date(day + 'T12:00:00Z'))}</h1>
@@ -67,7 +69,7 @@ export default function Heute() {
             </div>
             {day !== today && (
               <div className="flex justify-center mt-2">
-                <button type="button" onClick={() => setDay(null)} className="text-sm font-semibold text-accent px-3 py-1.5 rounded-full hover:bg-surface">
+                <button type="button" onClick={() => setDay(null)} className="text-sm font-semibold text-accent-ink px-3 py-1.5 rounded-full hover:bg-surface">
                   Zurück zu heute
                 </button>
               </div>

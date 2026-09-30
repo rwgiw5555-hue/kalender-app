@@ -66,7 +66,7 @@ export default function AppShell({ active, sidebar, children }: { active: Page; 
               key={n.page}
               href={n.href}
               aria-current={active === n.page ? 'page' : undefined}
-              className={`min-w-16 min-h-11 flex flex-col items-center justify-center gap-1 text-xs font-semibold ${active === n.page ? 'text-accent' : 'text-muted'}`}
+              className={`min-w-16 min-h-11 flex flex-col items-center justify-center gap-1 text-xs font-semibold ${active === n.page ? 'text-accent-ink' : 'text-muted'}`}
             >
               <Icon name={n.icon} size={22} />
               {n.label}

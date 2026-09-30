@@ -28,7 +28,7 @@ export function Checkbox({ done, label, disabled, onClick, compact }: { done: bo
       className={`${compact ? 'w-9 h-9' : 'w-11 h-11'} -m-2 shrink-0 flex items-center justify-center rounded-full`}
     >
       <span
-        className={`${size} rounded-full flex items-center justify-center transition-colors ${done ? 'bg-accent text-on-accent' : 'border-2 border-muted/60'}`}
+        className={`${size} rounded-full flex items-center justify-center transition-colors ${done ? 'bg-accent text-on-accent' : 'border-2 border-muted'}`}
       >
         {done && <Icon name="check" size={compact ? 12 : 15} strokeWidth={3} />}
       </span>
@@ -67,7 +67,7 @@ export default function TaskList({ tasks, pending, onToggle, onDelete, onAdd, pl
                 type="button"
                 onClick={() => onDelete(t)}
                 aria-label={`${t.title} löschen`}
-                className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-muted hover:text-danger hover:bg-surface-2 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-muted hover:text-danger hover:bg-surface-2 [@media(hover:hover)_and_(min-width:640px)]:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
               >
                 <Icon name="close" size={16} />
               </button>

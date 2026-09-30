@@ -11,6 +11,8 @@
   --app-accent: #0F766E;
   --app-accent-soft: #DDF1EE;
   --app-on-accent: #FFFFFF;
+  --app-accent-ink: #0F766E;
+  --app-on-danger: #FFFFFF;
   --app-danger: #B42318;
   --app-radius: 16px;
   --app-font-body: var(--font-jakarta);
@@ -28,6 +30,8 @@
   --color-accent: var(--app-accent);
   --color-accent-soft: var(--app-accent-soft);
   --color-on-accent: var(--app-on-accent);
+  --color-accent-ink: var(--app-accent-ink);
+  --color-on-danger: var(--app-on-danger);
   --color-danger: var(--app-danger);
   --radius-app: var(--app-radius);
   --font-body: var(--app-font-body);
@@ -98,7 +102,7 @@ body {
   color: var(--app-ink);
 }
 .fc .fc-day-today .cal-head-day {
-  color: var(--app-accent);
+  color: var(--app-accent-ink);
 }
 .fc .fc-day-today .cal-head-num {
   background: var(--app-accent);

@@ -180,7 +180,7 @@ export default function NaturalInput({ onChanged }: Props) {
             aria-label={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
             title={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
             className={`w-12 h-12 shrink-0 rounded-[calc(var(--app-radius)*0.75)] flex items-center justify-center transition-colors ${
-              listening ? 'bg-danger text-white animate-pulse' : 'bg-accent text-on-accent hover:opacity-90'
+              listening ? 'bg-danger text-on-danger animate-pulse' : 'bg-accent text-on-accent hover:opacity-90'
             }`}
           >
             <Icon name="mic" size={22} />
@@ -230,7 +230,7 @@ export default function NaturalInput({ onChanged }: Props) {
               <button
                 onClick={() => confirm(() => fetch(`/api/events/${preview.eventId}`, { method: 'DELETE' }))}
               disabled={saving}
-                className="h-11 px-5 rounded-[calc(var(--app-radius)*0.6)] text-sm bg-danger text-white hover:opacity-90 font-semibold"
+                className="h-11 px-5 rounded-[calc(var(--app-radius)*0.6)] text-sm bg-danger text-on-danger hover:opacity-90 font-semibold"
               >
                 Löschen
               </button>

@@ -60,9 +60,10 @@ export default function MiniMonth({ today, selected, onSelect }: { today: string
               onClick={() => onSelect(c.day)}
               aria-label={c.day.split('-').reverse().join('.')}
               aria-current={isToday ? 'date' : undefined}
+              aria-pressed={isSel}
               className={`h-8 rounded-full text-[13px] tabular-nums transition-colors ${
                 isSel ? 'bg-accent text-on-accent font-bold'
-                  : isToday ? 'text-accent font-bold hover:bg-surface-2'
+                  : isToday ? 'text-accent-ink font-bold hover:bg-surface-2'
                   : c.other ? 'text-muted/70 hover:bg-surface-2' : 'text-ink hover:bg-surface-2'
               }`}
             >

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import Icon from './Icon'
 import { setAiContext, useAiContext } from '@/lib/client'
 import { saveThemeSetting, StyleKey, STYLES, useThemeSetting } from '@/lib/theme'
@@ -9,6 +9,10 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const theme = useThemeSetting()
   const aiContext = useAiContext()
   const accent = theme.accent ?? STYLES[theme.style].palette.accent
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  // Beim Öffnen Fokus in den Dialog
+  useEffect(() => { closeRef.current?.focus() }, [])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -27,13 +31,13 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-center justify-between mb-5">
           <h2 id="settings-title" className="font-head text-lg font-bold">Einstellungen</h2>
-          <button type="button" onClick={onClose} aria-label="Schließen" className="w-10 h-10 -mr-2 rounded-full flex items-center justify-center text-muted hover:bg-surface-2">
+          <button ref={closeRef} type="button" onClick={onClose} aria-label="Schließen" className="w-10 h-10 -mr-2 rounded-full flex items-center justify-center text-muted hover:bg-surface-2">
             <Icon name="close" size={20} />
           </button>
         </div>
 
         <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Stil</h3>
-        <div className="grid grid-cols-3 gap-2 mb-6" role="radiogroup" aria-label="Stil">
+        <div className="grid grid-cols-3 gap-2 mb-6" role="group" aria-label="Stil">
           {(Object.keys(STYLES) as StyleKey[]).map(key => {
             const s = STYLES[key]
             const active = theme.style === key
@@ -41,8 +45,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               <button
                 key={key}
                 type="button"
-                role="radio"
-                aria-checked={active}
+                aria-pressed={active}
                 onClick={() => saveThemeSetting({ ...theme, style: key })}
                 className={`rounded-[calc(var(--app-radius)*0.75)] p-2 text-left border-2 transition-colors ${active ? 'border-accent' : 'border-line hover:border-muted'}`}
               >
@@ -72,7 +75,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
           <label htmlFor="accent-color" className="text-sm flex-1">Eigene Farbe</label>
           {theme.accent && (
-            <button type="button" onClick={() => saveThemeSetting({ ...theme, accent: null })} className="text-sm font-semibold text-accent px-2 py-1 rounded-lg hover:bg-surface-2">
+            <button type="button" onClick={() => saveThemeSetting({ ...theme, accent: null })} className="text-sm font-semibold text-accent-ink px-2 py-1 rounded-lg hover:bg-surface-2">
               Zurücksetzen
             </button>
           )}
