@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import CalendarView from '@/components/Calendar'
+import CalendarView, { alertSaveError } from '@/components/Calendar'
 import EventModal, { EventFormData } from '@/components/EventModal'
 import SettingsPanel, { CalendarTheme, PRESETS } from '@/components/SettingsPanel'
 
@@ -12,6 +12,7 @@ export interface DbEvent {
   endTime: string
   category?: string | null
   color?: string | null
+  rrule?: string | null
 }
 
 const DEFAULT_THEME = PRESETS[0].theme
@@ -73,11 +74,12 @@ export default function Home() {
   useEffect(() => { loadEvents() }, [loadEvents])
 
   async function handleSave(data: EventFormData) {
-    await fetch('/api/events', {
+    const res = await fetch('/api/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
+    if (!res.ok) return alertSaveError(res)
     setAddModal(false)
     loadEvents()
   }

@@ -13,6 +13,7 @@
     "@fullcalendar/daygrid": "^6.1.21",
     "@fullcalendar/interaction": "^6.1.21",
     "@fullcalendar/react": "^6.1.21",
+    "@fullcalendar/rrule": "^6.1.21",
     "@fullcalendar/timegrid": "^6.1.21",
     "@libsql/client": "^0.17.4",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
@@ -23,7 +24,8 @@
     "next": "16.2.9",
     "prisma": "^7.8.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
