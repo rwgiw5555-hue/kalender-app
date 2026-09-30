@@ -95,7 +95,8 @@ export default function NaturalInput({ onEventCreated }: Props) {
       setText('')
       onEventCreated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler')
+      // fetch wirft TypeError bei fehlender Verbindung (Meldung sonst englisch)
+      setError(err instanceof TypeError ? 'Keine Verbindung zum Kalender' : err instanceof Error ? err.message : 'Fehler')
     } finally {
       setLoading(false)
     }

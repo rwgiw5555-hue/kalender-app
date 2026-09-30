@@ -48,6 +48,7 @@ ssh root@<IP-ADRESSE>
 Alles folgende auf dem Server als `root`:
 
 ```bash
+timedatectl set-timezone Europe/Berlin       # Sicherungen um 3:30 deutscher Zeit
 apt update && apt upgrade -y
 apt install -y git sqlite3 build-essential ufw unattended-upgrades
 dpkg-reconfigure -plow unattended-upgrades   # automatische Sicherheitsupdates: „Ja“
@@ -106,8 +107,11 @@ sudo -u kalender npm ci --no-audit --no-fund
 sudo -u kalender bash -c 'set -a; . /etc/kalender.env; set +a; npx prisma generate && npx prisma migrate deploy && npm run build'
 
 cp deploy/kalender.service deploy/kalender-backup.service deploy/kalender-backup.timer /etc/systemd/system/
+# Update-Skript an eine Stelle, die nur root ändern darf
+install -m 755 -o root -g root deploy/update.sh /usr/local/sbin/kalender-update
 systemctl daemon-reload
 systemctl enable --now kalender kalender-backup.timer
+sleep 5
 systemctl status kalender     # sollte „active (running)“ zeigen
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/   # sollte 200 sein
 ```
@@ -162,11 +166,13 @@ Neue Version aus GitHub einspielen:
 
 ```bash
 ssh root@<NAME>
-/opt/kalender/deploy/update.sh
+kalender-update
 ```
 
 Das holt den neuen Stand, spielt Datenbank-Änderungen ein, baut neu und startet die App
-neu. Deine Termine bleiben erhalten.
+neu. Die App ist dabei ein bis zwei Minuten nicht erreichbar. Deine Termine bleiben
+erhalten. Meldet das Skript, dass sich `deploy/update.sh` geändert hat, die Änderung kurz
+ansehen und mit dem angezeigten Befehl übernehmen.
 
 ## Sicherungen
 
@@ -186,6 +192,13 @@ neu. Deine Termine bleiben erhalten.
   chown kalender:kalender /var/lib/kalender/kalender.db
   systemctl start kalender
   ```
+
+## Notfall: kein Zugang mehr
+
+Funktioniert Tailscale auf dem Server nicht mehr, ist er von außen absichtlich unerreichbar.
+Dann in der Hetzner-Konsole beim Server die **Konsole** (Bildschirm-Symbol) öffnen und sich
+dort anmelden. Falls kein root-Passwort gesetzt ist: unter **Rescue** „Root-Passwort
+zurücksetzen“. Danach z. B. `tailscale up --ssh` erneut ausführen.
 
 ## Was wo liegt
 

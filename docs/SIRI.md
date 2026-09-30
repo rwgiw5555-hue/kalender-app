@@ -1,11 +1,11 @@
 # Termine per Siri eintragen
 
-Mit einem Kurzbefehl sagst du „Hey Siri, Termin eintragen“, diktierst den Termin, und
+Mit einem Kurzbefehl sagst du „Hey Siri, Mein Kalender“, diktierst den Termin, und
 Siri liest die Bestätigung vor, z. B. „Zahnarzt am Donnerstag, 1. Oktober um 14:00
 eingetragen.“
 
-Beginnt der Satz mit **„Aufgabe“**, **„To-do“** oder **„Erinnere mich an“**, wird daraus
-eine Aufgabe für heute statt eines Termins: „Aufgabe Milch kaufen“.
+Beginnt der Satz mit **„Aufgabe“** oder **„To-do“**, wird daraus eine Aufgabe für heute
+statt eines Termins: „Aufgabe Milch kaufen“.
 
 ## Voraussetzungen
 
@@ -52,12 +52,13 @@ Kurzbefehle-App öffnen, oben rechts **+**, dann nacheinander diese Aktionen hin
 4. **Text sprechen**
    - Text: **Wörterbuchwert** (aus Schritt 3)
 
-Oben den Namen des Kurzbefehls auf **„Termin eintragen“** ändern. Dieser Name ist auch der
-Satz für Siri.
+Oben den Namen des Kurzbefehls auf **„Mein Kalender“** ändern. Dieser Name ist auch der
+Satz für Siri. Namen wie „Termin eintragen“ besser vermeiden: Die verwechselt Siri leicht
+mit der eingebauten Kalender-App.
 
 ## 3. Ausprobieren
 
-„Hey Siri, Termin eintragen“, dann z. B.:
+„Hey Siri, Mein Kalender“, dann z. B.:
 
 - „Morgen um 14 Uhr Zahnarzt“
 - „Jeden Montag um 18 Uhr aufräumen“
@@ -70,7 +71,9 @@ Satz für Siri.
 |---|---|
 | „Zugriff verweigert.“ | Schlüssel im Kurzbefehl stimmt nicht mit `SHORTCUT_TOKEN` überein, oder „Bearer “ fehlt |
 | „Der Kurzbefehl ist nicht eingerichtet.“ | `SHORTCUT_TOKEN` fehlt auf dem Server oder ist kürzer als 32 Zeichen |
-| Fehler „Nicht erlaubt“ oder gar keine Antwort | Tailscale auf dem iPhone ist aus, oder der Name fehlt in `ALLOWED_HOSTS` |
+| „Diese Adresse ist für den Kalender nicht freigegeben.“ | Tailscale-Name fehlt in `ALLOWED_HOSTS` |
+| Gar keine Antwort oder Zeitüberschreitung | Tailscale auf dem iPhone ist aus |
+| „Beim Speichern ist etwas schiefgegangen.“ | Problem auf dem Server, siehe `journalctl -u kalender` |
 | „Das habe ich nicht als Termin verstanden …“ | Satz war unklar; nochmal mit Datum und Uhrzeit sagen |
 | „Der Kalender kann den Text gerade nicht auswerten.“ | Claude API nicht erreichbar oder `ANTHROPIC_API_KEY` fehlt |
 
