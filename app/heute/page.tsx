@@ -26,14 +26,33 @@ const CATEGORY_COLORS: Record<string, string> = {
 const timeFmt = new Intl.DateTimeFormat('de-DE', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit' })
 const dayFmt = new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
 
-function eventsOnDay(events: DbEvent[], day: string) {
-  return events
-    .filter(e => {
-      const start = localDate(new Date(e.startTime))
-      const rule = parseRecurrence(e.rrule)
-      return rule.ok && rule.value ? occursOn(rule.value, start, day) : start === day
-    })
-    .sort((a, b) => timeFmt.format(new Date(a.startTime)).localeCompare(timeFmt.format(new Date(b.startTime))))
+interface DayEvent extends DbEvent {
+  label: string // Uhrzeit, „bis 10:00“ oder „ganztags“ bei mehrtägigen Terminen
+  sortKey: string
+}
+
+// Termine an `day`: Serien über occursOn, einmalige Termine an jedem Tag,
+// über den sie reichen (Ende um 0:00 zählt zum Vortag)
+function eventsOnDay(events: DbEvent[], day: string): DayEvent[] {
+  const result: DayEvent[] = []
+  for (const e of events) {
+    const start = new Date(e.startTime)
+    const end = new Date(e.endTime)
+    const startDay = localDate(start)
+    const startTime = timeFmt.format(start)
+    const rule = parseRecurrence(e.rrule)
+    if (rule.ok && rule.value) {
+      if (occursOn(rule.value, startDay, day)) result.push({ ...e, label: startTime, sortKey: startTime })
+      continue
+    }
+    const endTime = timeFmt.format(end)
+    const endDay = endTime === '00:00' && end > start ? addDays(localDate(end), -1) : localDate(end)
+    if (day < startDay || day > endDay) continue
+    if (day === startDay) result.push({ ...e, label: startTime, sortKey: startTime })
+    else if (day === endDay && endTime !== '00:00') result.push({ ...e, label: `bis ${endTime}`, sortKey: '00:00' })
+    else result.push({ ...e, label: 'ganztags', sortKey: '' })
+  }
+  return result.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 }
 
 async function send(url: string, method: string, body?: unknown) {
@@ -60,11 +79,24 @@ function loadAccent(): string {
 }
 
 const noSubscribe = () => () => {}
+// Jede Minute neu prüfen, damit „heute“ nach Mitternacht weiterspringt
+const everyMinute = (cb: () => void) => {
+  const id = setInterval(cb, 60000)
+  return () => clearInterval(id)
+}
+
+const LOAD_ERROR = 'Daten konnten nicht geladen werden'
+
+async function getJson(url: string) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error()
+  return res.json()
+}
 
 export default function Heute() {
   // Datum und Farbe erst im Browser bestimmen (auf dem Server null),
   // damit vorgerenderte Seite und Browser nicht auseinanderlaufen
-  const today = useSyncExternalStore(noSubscribe, () => localDate(new Date()), () => null)
+  const today = useSyncExternalStore(everyMinute, () => localDate(new Date()), () => null)
   const accent = useSyncExternalStore(noSubscribe, loadAccent, () => '#3b82f6')
   const [selected, setDay] = useState<string | null>(null)
   const day = selected ?? today
@@ -72,21 +104,23 @@ export default function Heute() {
   const [tasks, setTasks] = useState<DayTask[]>([])
   const [error, setError] = useState('')
   const [version, setVersion] = useState(0)
+  const [pending, setPending] = useState<Set<number>>(new Set())
   const load = () => setVersion(v => v + 1)
 
   useEffect(() => {
     if (!day) return
     let cancelled = false
     Promise.all([
-      fetch('/api/events').then(r => r.json()),
-      fetch(`/api/tasks?date=${day}`).then(r => r.json()),
+      getJson('/api/events'),
+      getJson(`/api/tasks?date=${day}`),
     ])
       .then(([ev, ts]) => {
         if (cancelled) return
         setEvents(ev)
         setTasks(ts)
+        setError(e => (e === LOAD_ERROR ? '' : e))
       })
-      .catch(() => { if (!cancelled) setError('Daten konnten nicht geladen werden') })
+      .catch(() => { if (!cancelled) setError(LOAD_ERROR) })
     return () => { cancelled = true }
   }, [day, version])
 
@@ -100,9 +134,22 @@ export default function Heute() {
     load()
   }
 
-  function toggle(task: DayTask) {
+  // Pro Aufgabe nur eine Anfrage gleichzeitig, damit Doppelklicks sich nicht überholen
+  async function toggle(task: DayTask) {
+    if (pending.has(task.id)) return
+    setPending(p => new Set(p).add(task.id))
     setTasks(ts => ts.map(t => (t.id === task.id ? { ...t, done: !t.done } : t)))
-    run(() => send(`/api/tasks/${task.id}/done`, 'PUT', { date: day, done: !task.done }))
+    await run(() => send(`/api/tasks/${task.id}/done`, 'PUT', { date: day, done: !task.done }))
+    setPending(p => {
+      const next = new Set(p)
+      next.delete(task.id)
+      return next
+    })
+  }
+
+  // Ist der gewählte Tag heute, folgt die Ansicht „heute“ (auch über Mitternacht)
+  function go(d: string) {
+    setDay(d === today ? null : d)
   }
 
   if (!day || !today) return null
@@ -121,18 +168,18 @@ export default function Heute() {
               ‹ Kalender
             </Link>
             {day !== today && (
-              <button onClick={() => setDay(today)} className="text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-100" style={{ color: accent }}>
+              <button onClick={() => setDay(null)} className="text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-100" style={{ color: accent }}>
                 Heute
               </button>
             )}
           </div>
           <div className="flex items-center justify-between mt-1">
-            <button onClick={() => setDay(addDays(day, -1))} aria-label="Vorheriger Tag" className="w-11 h-11 rounded-full text-2xl text-gray-400 hover:bg-gray-100">‹</button>
+            <button onClick={() => go(addDays(day, -1))} aria-label="Vorheriger Tag" className="w-11 h-11 rounded-full text-2xl text-gray-400 hover:bg-gray-100">‹</button>
             <div className="text-center">
               <h1 className="text-xl font-semibold text-gray-900">{dayFmt.format(new Date(day + 'T12:00:00Z'))}</h1>
               <p className="text-xs text-gray-400">{openCount === 0 ? 'Alles erledigt' : `${openCount} offen`}</p>
             </div>
-            <button onClick={() => setDay(addDays(day, 1))} aria-label="Nächster Tag" className="w-11 h-11 rounded-full text-2xl text-gray-400 hover:bg-gray-100">›</button>
+            <button onClick={() => go(addDays(day, 1))} aria-label="Nächster Tag" className="w-11 h-11 rounded-full text-2xl text-gray-400 hover:bg-gray-100">›</button>
           </div>
         </header>
         <div className="mt-1">
@@ -149,25 +196,28 @@ export default function Heute() {
           <ul className="space-y-3">
             {dayEvents.map(e => {
               const rule = parseRecurrence(e.rrule)
+              const eventSteps = steps(e.id)
               const color = e.color ?? CATEGORY_COLORS[e.category ?? 'Sonstiges'] ?? '#8b5cf6'
               return (
                 <li key={e.id} className="bg-white rounded-2xl shadow-sm border-l-4 px-4 py-3" style={{ borderColor: color }}>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-sm font-semibold tabular-nums text-gray-500">{timeFmt.format(new Date(e.startTime))}</span>
+                    <span className="text-sm font-semibold tabular-nums text-gray-500 min-w-11">{e.label}</span>
                     <span className="font-medium text-gray-900 flex-1">{e.title}</span>
                   </div>
                   {rule.ok && rule.value && (
-                    <>
-                      <p className="text-xs text-gray-400 mt-0.5 ml-14">{describeRecurrence(rule.value)}</p>
-                      <TaskList
-                        tasks={steps(e.id)}
-                        accent={accent}
-                        onToggle={toggle}
-                        onDelete={t => run(() => send(`/api/tasks/${t.id}`, 'DELETE'))}
-                        onAdd={title => run(() => send('/api/tasks', 'POST', { title, eventId: e.id, position: steps(e.id).length }))}
-                        placeholder="Schritt hinzufügen"
-                      />
-                    </>
+                    <p className="text-xs text-gray-400 mt-0.5 ml-14">{describeRecurrence(rule.value)}</p>
+                  )}
+                  {/* Schritte bei Routinen immer, bei einmaligen Terminen nur wenn vorhanden */}
+                  {(rule.ok && rule.value || eventSteps.length > 0) && (
+                    <TaskList
+                      tasks={eventSteps}
+                      accent={accent}
+                      pending={pending}
+                      onToggle={toggle}
+                      onDelete={t => run(() => send(`/api/tasks/${t.id}`, 'DELETE'))}
+                      onAdd={title => run(() => send('/api/tasks', 'POST', { title, eventId: e.id, position: eventSteps.length }))}
+                      placeholder="Schritt hinzufügen"
+                    />
                   )}
                 </li>
               )
@@ -181,6 +231,7 @@ export default function Heute() {
             <TaskList
               tasks={looseTasks}
               accent={accent}
+              pending={pending}
               onToggle={toggle}
               onDelete={t => run(() => send(`/api/tasks/${t.id}`, 'DELETE'))}
               onAdd={(title, repeat) => run(() => send('/api/tasks', 'POST', {
@@ -201,6 +252,7 @@ export default function Heute() {
 interface TaskListProps {
   tasks: DayTask[]
   accent: string
+  pending: Set<number>
   onToggle: (t: DayTask) => void
   onDelete: (t: DayTask) => void
   onAdd: (title: string, repeat: string) => void
@@ -208,7 +260,7 @@ interface TaskListProps {
   withRepeat?: boolean
 }
 
-function TaskList({ tasks, accent, onToggle, onDelete, onAdd, placeholder, withRepeat }: TaskListProps) {
+function TaskList({ tasks, accent, pending, onToggle, onDelete, onAdd, placeholder, withRepeat }: TaskListProps) {
   const [title, setTitle] = useState('')
   const [repeat, setRepeat] = useState('none')
 
@@ -227,6 +279,7 @@ function TaskList({ tasks, accent, onToggle, onDelete, onAdd, placeholder, withR
           <li key={t.id} className="group flex items-center gap-3 min-h-11">
             <button
               onClick={() => onToggle(t)}
+              disabled={pending.has(t.id)}
               role="checkbox"
               aria-checked={t.done}
               aria-label={t.title}
@@ -247,7 +300,7 @@ function TaskList({ tasks, accent, onToggle, onDelete, onAdd, placeholder, withR
             <button
               onClick={() => onDelete(t)}
               aria-label={`${t.title} löschen`}
-              className="w-9 h-9 shrink-0 rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+              className="w-9 h-9 shrink-0 rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
             >
               ×
             </button>

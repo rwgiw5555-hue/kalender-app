@@ -24,7 +24,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (result.data.eventId !== null && !(await prisma.event.findUnique({ where: { id: result.data.eventId } }))) {
     return NextResponse.json({ error: 'Termin nicht gefunden' }, { status: 400 })
   }
-  const task = await prisma.task.update({ where: { id }, data: result.data })
+  // Wechselt die Aufgabe ihre Art (Routine-Schritt, wiederkehrend, einmalig),
+  // passen alte Haken nicht mehr und werden entfernt
+  const kindChanged = result.data.eventId !== existing.eventId || result.data.rrule !== existing.rrule
+  const update = prisma.task.update({ where: { id }, data: result.data })
+  const task = kindChanged
+    ? (await prisma.$transaction([prisma.taskCompletion.deleteMany({ where: { taskId: id } }), update]))[1]
+    : await update
   return NextResponse.json(task)
 }
 

@@ -64,6 +64,25 @@ export function validateTask(body: unknown, today: string): Result {
   return { ok: true, data: { title, date, rrule: serializeRecurrence(recurrence.value), eventId, position } }
 }
 
+type TaskWithEvent = {
+  date: string | null
+  rrule: string | null
+  event: { startTime: Date; rrule: string | null } | null
+}
+
+// Findet eine Routine-Aufgabe oder wiederkehrende Aufgabe an `day` statt?
+// null bei einmaligen Aufgaben (die haben keine festen Tage).
+export function taskOccursOn(t: TaskWithEvent, day: string): boolean | null {
+  if (t.event) {
+    const eventRule = parseRecurrence(t.event.rrule)
+    const start = localDate(t.event.startTime)
+    return eventRule.ok && eventRule.value ? occursOn(eventRule.value, start, day) : start === day
+  }
+  const rule = parseRecurrence(t.rrule)
+  if (rule.ok && rule.value) return occursOn(rule.value, t.date ?? day, day)
+  return null
+}
+
 export interface DayTask {
   id: number
   title: string
@@ -93,15 +112,11 @@ export async function tasksForDay(day: string): Promise<DayTask[]> {
     const doneToday = t.completions.some(c => c.date === day)
     const rule = parseRecurrence(t.rrule)
     const recurrence = rule.ok ? rule.value : null
-    let show: boolean
+    let show = taskOccursOn(t, day)
     let overdue = false
 
-    if (t.event) {
-      const eventRule = parseRecurrence(t.event.rrule)
-      const start = localDate(t.event.startTime)
-      show = eventRule.ok && eventRule.value ? occursOn(eventRule.value, start, day) : start === day
-    } else if (recurrence) {
-      show = occursOn(recurrence, t.date ?? day, day)
+    if (show !== null) {
+      // Routine-Schritt oder wiederkehrende Aufgabe: steht fest
     } else if (t.completions.length > 0) {
       show = doneToday
     } else {

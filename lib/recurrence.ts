@@ -49,7 +49,13 @@ export function parseRecurrence(input: unknown): ParseResult {
     const days = r.byweekday.map(d => (typeof d === 'string' ? d.toLowerCase() : d))
     if (!days.every(d => (WEEKDAYS as readonly unknown[]).includes(d))) return { ok: false }
     // Sortiert und ohne Doppelte, damit gleiche Regeln gleich aussehen; leere Liste = keine Einschränkung
-    if (days.length) value.byweekday = WEEKDAYS.filter(d => days.includes(d))
+    if (days.length) {
+      // Wochentage gibt es nur bei wöchentlichen Regeln. „Täglich an Werktagen“
+      // ist dasselbe wie „wöchentlich Mo–Fr“; alles andere wäre mehrdeutig.
+      if (value.freq === 'daily' && !value.interval) value.freq = 'weekly'
+      else if (value.freq !== 'weekly') return { ok: false }
+      value.byweekday = WEEKDAYS.filter(d => days.includes(d))
+    }
   }
 
   if (r.until != null) {
