@@ -1,8 +1,10 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import CalendarView, { alertSaveError } from '@/components/Calendar'
+import CalendarView from '@/components/Calendar'
+import { alertSaveError } from '@/lib/client'
 import EventModal, { EventFormData } from '@/components/EventModal'
+import NaturalInput from '@/components/NaturalInput'
 import SettingsPanel, { CalendarTheme, PRESETS } from '@/components/SettingsPanel'
 
 export interface DbEvent {
@@ -145,6 +147,10 @@ export default function Home() {
           </svg>
         </button>
         </div>
+      </div>
+
+      <div className="px-4 pb-1 max-w-2xl w-full shrink-0">
+        <NaturalInput onChanged={loadEvents} />
       </div>
 
       <CalendarView events={events} onRefresh={loadEvents} theme={theme} />

@@ -183,7 +183,7 @@ export default function Heute() {
           </div>
         </header>
         <div className="mt-1">
-          <NaturalInput onEventCreated={load} />
+          <NaturalInput onChanged={load} />
         </div>
 
         {error && (
