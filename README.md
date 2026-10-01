@@ -32,7 +32,9 @@ Dann <http://127.0.0.1:3000> öffnen. Unter Windows startet `start.bat` die App 
 Browser.
 
 Nach einem `git pull` immer `npm install` und `npx prisma migrate deploy` ausführen. Deine
-Termine bleiben dabei erhalten.
+Termine bleiben dabei erhalten. Sieht die App danach noch teilweise alt aus (falsche Farben,
+alte Schriften), die App stoppen, den Ordner `.next` löschen (Zwischenspeicher, wird neu
+erzeugt) und neu starten.
 
 ## Einstellungen (`.env`)
 
