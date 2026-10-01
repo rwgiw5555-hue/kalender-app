@@ -39,7 +39,9 @@ export default function RootLayout({
     >
       <head>
         {/* Platz für die Styles von FullCalendar: Ohne ihn fügt FullCalendar ein eigenes
-            <style> vor unserem ein, und React meldet beim Hydrieren einen Unterschied */}
+            <style> vor unserem ein, und React meldet beim Hydrieren einen Unterschied.
+            Next.js setzt globals.css davor: Überschreibungen von FullCalendar-Regeln dort
+            brauchen also eine höhere Spezifität als die Originalregel */}
         <style data-fullcalendar="" />
         <style dangerouslySetInnerHTML={{ __html: STYLE_CSS }} />
         {/* Gespeicherten Stil vor dem ersten Zeichnen setzen (kein Aufblitzen) */}
