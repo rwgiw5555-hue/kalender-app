@@ -38,6 +38,9 @@ export default function RootLayout({
       className={`${jakarta.variable} ${dmSans.variable} ${grotesk.variable} ${figtree.variable} h-full antialiased`}
     >
       <head>
+        {/* Platz für die Styles von FullCalendar: Ohne ihn fügt FullCalendar ein eigenes
+            <style> vor unserem ein, und React meldet beim Hydrieren einen Unterschied */}
+        <style data-fullcalendar="" />
         <style dangerouslySetInnerHTML={{ __html: STYLE_CSS }} />
         {/* Gespeicherten Stil vor dem ersten Zeichnen setzen (kein Aufblitzen) */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
