@@ -13,6 +13,7 @@ PC ──────┘                                   │   127.0.0.1:3000 
 ```
 
 Kosten: Server ca. 6 €/Monat (Hetzner CX23), Tailscale im Privat-Tarif kostenlos.
+Alternative ohne Mietserver: ein Raspberry Pi zu Hause, siehe [RASPBERRY-PI.md](RASPBERRY-PI.md).
 Zeitaufwand beim ersten Mal: etwa eine Stunde.
 
 ## 1. Tailscale auf PC und iPhone

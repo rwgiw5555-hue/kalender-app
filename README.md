@@ -66,6 +66,7 @@ erzeugt) und neu starten.
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): Plan und Hintergründe
 - [docs/SERVER.md](docs/SERVER.md): privaten Server einrichten
+- [docs/RASPBERRY-PI.md](docs/RASPBERRY-PI.md): Raspberry Pi als Heimserver (Einkaufsliste, Einrichtung)
 - [docs/SIRI.md](docs/SIRI.md): Siri-Kurzbefehl einrichten
 
 ## Technik
