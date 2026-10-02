@@ -124,9 +124,14 @@ async function loadTasks(): Promise<ContextTask[]> {
     select: { id: true, title: true, date: true, rrule: true, completions: { select: { id: true }, take: 1 } },
     orderBy: [{ position: 'asc' }, { id: 'asc' }],
   })
+  const today = localDate(new Date())
   return tasks
-    // Einmalige Aufgaben nur, solange sie nicht erledigt sind; wiederkehrende immer
-    .filter(t => t.rrule !== null || t.completions.length === 0)
+    // Einmalige Aufgaben nur, solange sie nicht erledigt sind; wiederkehrende, solange die Serie läuft
+    .filter(t => {
+      if (t.rrule === null) return t.completions.length === 0
+      const rule = parseRecurrence(t.rrule)
+      return !(rule.ok && rule.value?.until && rule.value.until < today)
+    })
     .slice(0, MAX_CONTEXT_TASKS)
     .map(({ id, title, date, rrule }) => ({ id, title, date, rrule }))
 }
@@ -179,7 +184,9 @@ function taskLines(tasks: ContextTask[]): string {
   if (tasks.length === 0) return '(keine offenen Aufgaben)'
   return tasks.map(t => {
     const repeat = repeatText(t.rrule)
-    return `#${t.id} | ${cleanTitle(t.title)} | ${t.date ? `fällig ${t.date}` : 'ohne Datum'}${repeat ? ` | Wiederholung: ${repeat}` : ''}`
+    // Bei wiederkehrenden Aufgaben ist das Datum der Beginn der Serie
+    const due = t.date ? `${repeat ? 'ab' : 'fällig'} ${t.date}` : 'ohne Datum'
+    return `#${t.id} | ${cleanTitle(t.title)} | ${due}${repeat ? ` | Wiederholung: ${repeat}` : ''}`
   }).join('\n')
 }
 

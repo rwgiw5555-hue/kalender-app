@@ -95,7 +95,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
             <span className="block text-xs text-muted mt-1">
               Damit kann die Spracheingabe bestehende Termine ändern oder löschen („verschieb den Zahnarzt auf Freitag“)
               und offene Aufgaben in freie Zeiten einplanen („plan Steuer machen für Freitag ein“).
-              Dafür gehen Titel und Zeiten deiner Termine von 2 Wochen zurück bis 2 Monate voraus sowie Titel, Datum
+              Dafür gehen Titel, Zeiten, Kategorie und Wiederholung deiner Termine von 2 Wochen zurück bis 2 Monate voraus sowie Titel, Datum
               und Wiederholung deiner offenen Aufgaben an die Claude API
               (Anthropic: kein Training, keine Weitergabe, bis zu 30 Tage gespeichert). Beschreibungen nie.
               Gilt nur für dieses Gerät.
