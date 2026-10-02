@@ -5,11 +5,12 @@ import { rejectForeign } from '@/lib/request-guard'
 import { parseCommand } from '@/lib/parse'
 import { parseRecurrence } from '@/lib/recurrence'
 
-// Wertet gesprochenen/getippten Text aus und liefert einen VORSCHLAG
-// (anlegen, ändern, löschen). Gespeichert wird hier nichts; das macht die App
-// erst nach Bestätigung über /api/events.
+// Wertet gesprochenen/getippten Text aus und liefert eine Liste von VORSCHLÄGEN
+// (Termine anlegen, ändern, löschen; Aufgaben anlegen). Gespeichert wird hier nichts;
+// das macht die App erst, wenn der Nutzer einzelne Vorschläge bestätigt.
 // Body: { text, withCalendar } – withCalendar nur, wenn der Nutzer
 // „KI darf Termine sehen“ eingeschaltet hat.
+// Antwort: { proposals: [...], notes: [...] }
 
 type EventFields = Pick<EventInput, 'title' | 'description' | 'startTime' | 'endTime' | 'rrule'> & { category: string | null }
 
@@ -34,18 +35,29 @@ export async function POST(req: Request) {
   const result = await parseCommand(b.text, b.withCalendar === true)
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
 
-  const p = result.proposal
-  if (p.action === 'unclear') return NextResponse.json({ action: p.action, message: p.message })
-  if (p.action === 'create') return NextResponse.json({ action: p.action, message: p.message, event: toClient(p.event) })
-
   // Ändern/Löschen: aktuellen Stand mitschicken, damit die App „vorher → nachher“ zeigen kann
-  const current = await prisma.event.findUnique({ where: { id: p.eventId } })
-  if (!current) return NextResponse.json({ action: 'unclear', message: 'Den Termin gibt es nicht mehr.' })
-  return NextResponse.json({
-    action: p.action,
-    eventId: p.eventId,
-    message: p.message,
-    current: toClient(current),
-    ...(p.action === 'update' ? { event: toClient(p.event) } : {}),
+  const ids = result.proposals.flatMap(p => (p.action === 'update' || p.action === 'delete' ? [p.eventId] : []))
+  const current = new Map((ids.length ? await prisma.event.findMany({ where: { id: { in: ids } } }) : []).map(e => [e.id, e]))
+
+  const notes = [...result.notes]
+  const proposals = result.proposals.flatMap((p): object[] => {
+    if (p.action === 'create') return [{ action: p.action, message: p.message, event: toClient(p.event) }]
+    if (p.action === 'task') {
+      const rule = parseRecurrence(p.task.rrule)
+      return [{ action: p.action, message: p.message, task: { title: p.task.title, date: p.task.date, rrule: rule.ok ? rule.value : null } }]
+    }
+    const stored = current.get(p.eventId)
+    if (!stored) {
+      notes.push('Ein Termin, der geändert werden sollte, existiert nicht mehr.')
+      return []
+    }
+    return [{
+      action: p.action,
+      eventId: p.eventId,
+      message: p.message,
+      current: toClient(stored),
+      ...(p.action === 'update' ? { event: toClient(p.event) } : {}),
+    }]
   })
+  return NextResponse.json({ proposals, notes: [...new Set(notes)] })
 }

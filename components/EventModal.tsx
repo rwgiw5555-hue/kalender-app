@@ -22,6 +22,7 @@ interface Props {
   heading?: string
   note?: string
   previous?: string
+  saveLabel?: string
 }
 
 const CATEGORIES = ['Arbeit', 'Privat', 'Sport', 'Sonstiges']
@@ -31,7 +32,7 @@ function toLocal(iso: string) {
   return iso.slice(0, 16)
 }
 
-export default function EventModal({ mode, initial, onSave, onDelete, onClose, heading, note, previous }: Props) {
+export default function EventModal({ mode, initial, onSave, onDelete, onClose, heading, note, previous, saveLabel = 'Speichern' }: Props) {
   const titleRef = useRef<HTMLInputElement>(null)
   const initialRule = initial.rrule ?? null
   const [repeat, setRepeat] = useState(presetKey(initialRule))
@@ -183,7 +184,7 @@ export default function EventModal({ mode, initial, onSave, onDelete, onClose, h
               type="submit"
               className="h-11 px-5 rounded-[calc(var(--app-radius)*0.6)] text-sm bg-accent text-on-accent hover:opacity-90 transition-opacity font-semibold"
             >
-              Speichern
+              {saveLabel}
             </button>
           </div>
         </form>

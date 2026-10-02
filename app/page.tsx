@@ -35,8 +35,8 @@ export default function Home() {
     <>
       <p className="-mt-3 text-sm text-muted tabular-nums">{clock}</p>
       <div>
-        <h2 className="text-sm font-semibold text-muted mb-2">Neuer Termin</h2>
-        <NaturalInput onChanged={loadEvents} />
+        <h2 className="text-sm font-semibold text-muted mb-2">Eintragen</h2>
+        <NaturalInput onChanged={loadEvents} stacked />
       </div>
       {today && <MiniMonth today={today} selected={focus?.date ?? null} onSelect={date => setFocus(f => ({ date, n: (f?.n ?? 0) + 1 }))} />}
       <section aria-labelledby="sidebar-day" className="rounded-[var(--app-radius)] bg-surface-2 px-4 py-3">

@@ -100,6 +100,10 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
             </span>
           </span>
         </label>
+        <p className="text-xs text-muted mt-3 px-1">
+          Das Mikrofon wertet der Browser aus: Chrome schickt den Ton dafür an Google, Edge an Microsoft,
+          Safari an Apple. Wer das nicht möchte, tippt den Text oder nutzt die Diktierfunktion des Geräts.
+        </p>
       </div>
     </div>
   )

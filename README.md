@@ -11,8 +11,10 @@ eigenen PC oder einem privaten Server und ist fürs iPhone als Homescreen-App ge
   monatlich, jährlich, optional mit Enddatum).
 - **Mein Tag** (`/heute`): Fortschritt, Termine des Tages, Schritte der Routinen und Aufgaben
   zum Abhaken; auf dem Handy einspaltig, am PC zweispaltig.
-- **Spracheingabe:** „Morgen 14 Uhr Zahnarzt“ oder „Jeden Montag 18 Uhr aufräumen“ wird
-  über die Claude API zu einem Vorschlag, den du vor dem Speichern prüfst und bearbeitest.
+- **Spracheingabe:** Einfach drauflos reden, auch ein, zwei Minuten am Stück („morgen 14 Uhr
+  Zahnarzt, jeden Montag aufräumen, Milch kaufen …“). Die Claude API macht daraus eine Liste
+  von Terminen und Aufgaben; jeden Vorschlag bestätigst du mit Ja oder Nein, bearbeitest ihn
+  bei Bedarf und übernimmst dann alle auf einmal. Gespeichert wird nur, was du bestätigst.
   Mit dem Schalter „KI darf Termine sehen“ (Einstellungen, Standard aus) versteht sie
   auch „verschieb den Zahnarzt auf Freitag“ oder „Zahnarzt absagen“. Auf dem iPhone per
   Diktier-Taste oder Siri-Kurzbefehl.
