@@ -52,7 +52,9 @@ export async function POST(req: Request) {
     if (!result.ok) {
       return reply(result.status, result.status === 502
         ? 'Der Kalender kann den Text gerade nicht auswerten.'
-        : `Das habe ich nicht als Termin verstanden: ${result.error}.`)
+        : result.status === 409
+          ? 'Das waren mehrere Einträge. Bitte in der App eintragen, dort kannst du jeden einzeln bestätigen.'
+          : `Das habe ich nicht als Termin verstanden: ${result.error}.`)
     }
     const event = await prisma.event.create({ data: result.data })
     const rule = parseRecurrence(event.rrule)

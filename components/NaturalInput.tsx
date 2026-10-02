@@ -1,52 +1,28 @@
 'use client'
-import { useRef, useState, useSyncExternalStore } from 'react'
-import EventModal, { EventFormData } from './EventModal'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Icon from './Icon'
-import { alertSaveError, useAiContext } from '@/lib/client'
-import { describeRecurrence, Recurrence } from '@/lib/recurrence'
-import { TIME_ZONE } from '@/lib/dates'
+import ProposalReview, { Proposal } from './ProposalReview'
+import { useAiContext } from '@/lib/client'
 
 interface Props {
   onChanged: () => void
+  // Schmale Spalte (Seitenleiste am PC): Knöpfe unter dem Feld statt daneben
+  stacked?: boolean
 }
 
-interface ProposedEvent {
-  title: string
-  description: string
-  startTime: string
-  endTime: string
-  category: string
-  rrule: Recurrence | null
-}
-
-type Preview =
-  | { action: 'create'; message: string; event: ProposedEvent }
-  | { action: 'update'; message: string; eventId: number; event: ProposedEvent; current: ProposedEvent }
-  | { action: 'delete'; message: string; eventId: number; current: ProposedEvent }
-
-const whenFmt = new Intl.DateTimeFormat('de-DE', {
-  timeZone: TIME_ZONE, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-})
-const timeFmt = new Intl.DateTimeFormat('de-DE', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit' })
-
-// Der Dialog erwartet lokale Zeit (datetime-local), der Server liefert UTC
-function toLocalInput(iso: string) {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function describe(e: ProposedEvent) {
-  const repeat = e.rrule ? `, ${describeRecurrence(e.rrule)}` : ''
-  return `${e.title}, ${whenFmt.format(new Date(e.startTime))}–${timeFmt.format(new Date(e.endTime))}${repeat}`
-}
+// Ca. 2–3 Minuten Sprache; muss zu MAX_LONG_TEXT in lib/parse.ts passen
+const MAX_LENGTH = 6000
 
 // Minimal-Typen für die Web Speech API (nicht in den TypeScript-Standardtypen)
+interface RecognitionResult {
+  isFinal: boolean
+  0: { transcript: string }
+}
 interface Recognition {
   lang: string
   continuous: boolean
   interimResults: boolean
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onresult: ((e: { resultIndex: number; results: ArrayLike<RecognitionResult> }) => void) | null
   onend: (() => void) | null
   onerror: ((e: { error: string }) => void) | null
   start(): void
@@ -69,18 +45,107 @@ function getRecognition(): RecognitionConstructor | null {
 
 const noSubscribe = () => () => {}
 
-export default function NaturalInput({ onChanged }: Props) {
+const join = (a: string, b: string) => (a && b ? `${a} ${b}` : a || b)
+
+interface Review {
+  transcript: string
+  proposals: Proposal[]
+  notes: string[]
+}
+
+export default function NaturalInput({ onChanged, stacked }: Props) {
   const [text, setText] = useState('')
   const [listening, setListening] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [blocked, setBlocked] = useState(false)
+  const [review, setReview] = useState<Review | null>(null)
   const available = useSyncExternalStore(noSubscribe, () => getRecognition() !== null, () => false)
   const speechSupported = available && !blocked
+  const withCalendar = useAiContext()
+
   const recognitionRef = useRef<Recognition | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Aufnahme: Text vor dem aktuellen Erkennungs-Durchgang, gewünschter Zustand, aktueller Text
+  const baseRef = useRef('')
+  const wantRef = useRef(false)
+  const textRef = useRef('')
+  const abortRef = useRef(false)
+  // Neustart-Kontrolle: automatischer Durchgang?, schon etwas gehört?, Startzeit, sofortige Abbrüche
+  const autoRef = useRef(false)
+  const heardRef = useRef(false)
+  const startedAtRef = useRef(0)
+  const quickEndsRef = useRef(0)
+  const submitRef = useRef<(value: string) => void>(() => {})
+
+  function changeText(value: string) {
+    textRef.current = value
+    setText(value)
+  }
+
+  // Eingabefeld wächst mit dem Text (auch am PC), bis es scrollt
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [text])
+
+  const submit = useCallback(async (value: string) => {
+    const transcript = value.trim()
+    if (!transcript) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/parse-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: transcript, withCalendar }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? 'Nichts erkannt')
+      const proposals: Proposal[] = Array.isArray(data?.proposals) ? data.proposals : []
+      const notes: string[] = Array.isArray(data?.notes) ? data.notes : []
+      // Nichts wird direkt gespeichert: erst die Vorschläge zeigen
+      if (proposals.length === 0) setError(notes.join(' ') || 'Darin habe ich keinen Termin und keine Aufgabe gefunden.')
+      else setReview({ transcript, proposals, notes })
+    } catch (err) {
+      // fetch wirft TypeError bei fehlender Verbindung (Meldung sonst englisch)
+      setError(err instanceof TypeError ? 'Keine Verbindung zum Kalender' : err instanceof Error ? err.message : 'Fehler')
+    } finally {
+      setLoading(false)
+    }
+  }, [withCalendar])
+  useEffect(() => { submitRef.current = submit }, [submit])
+
+  // Ein Erkennungs-Durchgang; false, wenn der Browser den Start verweigert
+  function startRecognition(auto: boolean): boolean {
+    const rec = recognitionRef.current
+    if (!rec) return false
+    baseRef.current = textRef.current.trim()
+    autoRef.current = auto
+    heardRef.current = false
+    startedAtRef.current = Date.now()
+    try {
+      rec.start()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Aufnahme ist zu Ende: auswerten, außer nach einem Fehler
+  function finish() {
+    wantRef.current = false
+    setListening(false)
+    if (abortRef.current) abortRef.current = false
+    else submitRef.current(textRef.current)
+  }
 
   function toggleMic() {
     if (listening) {
+      // Stoppen: Nach dem letzten Ergebnis (onend) wird automatisch ausgewertet
+      wantRef.current = false
       recognitionRef.current?.stop()
       return
     }
@@ -89,86 +154,114 @@ export default function NaturalInput({ onChanged }: Props) {
       if (!SR) return
       const rec = new SR()
       rec.lang = 'de-DE'
-      rec.continuous = false
-      rec.interimResults = false
-      rec.onresult = e => setText(e.results[0][0].transcript)
-      rec.onend = () => setListening(false)
+      // Längere Sprachnachrichten: weiterhören bis „Stopp“, Zwischenstand anzeigen.
+      // Chrome auf Android liefert im Dauerbetrieb doppelte Ergebnisse; dort Satz für
+      // Satz erkennen und automatisch neu starten.
+      rec.continuous = !/Android/i.test(navigator.userAgent)
+      rec.interimResults = true
+      rec.onresult = e => {
+        heardRef.current = true
+        let heard = ''
+        for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript
+        const value = join(baseRef.current, heard.trim())
+        changeText(value.slice(0, MAX_LENGTH))
+        if (value.length >= MAX_LENGTH && wantRef.current) {
+          // Längenlimit erreicht: nichts mehr still verwerfen, sondern auswerten
+          wantRef.current = false
+          setError('Maximale Länge erreicht – der Rest bitte in einer zweiten Nachricht.')
+          rec.stop()
+        }
+      }
+      rec.onend = () => {
+        // Der Browser beendet die Erkennung nach Pausen oder ca. 1 Minute: weitermachen,
+        // solange nicht auf Stopp gedrückt wurde. Endet ein Durchgang mehrmals sofort
+        // ohne Ergebnis, aufhören statt endlos neu zu starten.
+        if (wantRef.current) {
+          const quick = !heardRef.current && Date.now() - startedAtRef.current < 1500
+          quickEndsRef.current = quick ? quickEndsRef.current + 1 : 0
+          if (quickEndsRef.current < 3 && startRecognition(true)) return
+        }
+        finish()
+      }
       rec.onerror = e => {
-        setListening(false)
+        if (e.error === 'no-speech' || e.error === 'aborted') return // onend startet neu bzw. beendet
+        wantRef.current = false
+        if ((e.error === 'not-allowed' || e.error === 'service-not-allowed') && autoRef.current) {
+          // Neustart ohne Tippen verweigert (z. B. Safari): Aufnahme normal beenden und auswerten
+          return
+        }
+        abortRef.current = true
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
           setBlocked(true)
           setError('Mikrofon nicht verfügbar – nutze die Diktier-Taste der Tastatur')
+        } else {
+          setError('Spracherkennung unterbrochen – der Text bleibt stehen, mit dem Pfeil auswerten')
         }
       }
       recognitionRef.current = rec
     }
     setError('')
-    recognitionRef.current.start()
+    wantRef.current = true
+    abortRef.current = false
+    quickEndsRef.current = 0
     setListening(true)
-  }
-
-  const withCalendar = useAiContext()
-  const [preview, setPreview] = useState<Preview | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!text.trim()) return
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch('/api/parse-event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, withCalendar }),
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(data?.error ?? 'Termin nicht erkannt')
-      // Nichts wird direkt gespeichert: erst Vorschlag zeigen
-      if (data.action === 'unclear') setError(data.message)
-      else setPreview(data)
-    } catch (err) {
-      // fetch wirft TypeError bei fehlender Verbindung (Meldung sonst englisch)
-      setError(err instanceof TypeError ? 'Keine Verbindung zum Kalender' : err instanceof Error ? err.message : 'Fehler')
-    } finally {
-      setLoading(false)
+    if (!startRecognition(false)) {
+      wantRef.current = false
+      setListening(false)
+      setError('Spracherkennung ließ sich nicht starten')
     }
   }
 
-  async function confirm(request: () => Promise<Response>) {
-    // Doppelklick: nur eine Anfrage gleichzeitig
-    if (saving) return
-    setSaving(true)
-    const res = await request().catch(() => null)
-    setSaving(false)
-    if (!res) return window.alert('Speichern fehlgeschlagen: keine Verbindung')
-    if (!res.ok) return alertSaveError(res)
-    setPreview(null)
-    setText('')
-    onChanged()
+  // Aufnahme beenden, wenn die Komponente verschwindet (z. B. Seitenwechsel)
+  useEffect(() => () => {
+    wantRef.current = false
+    abortRef.current = true
+    recognitionRef.current?.stop()
+  }, [])
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (listening) return
+    submit(text)
   }
 
-  function save(data: EventFormData) {
-    const body = JSON.stringify({
-      title: data.title, description: data.description, startTime: data.startTime,
-      endTime: data.endTime, category: data.category, rrule: data.rrule,
-    })
-    const headers = { 'Content-Type': 'application/json' }
-    confirm(() => preview?.action === 'update'
-      ? fetch(`/api/events/${preview.eventId}`, { method: 'PUT', headers, body })
-      : fetch('/api/events', { method: 'POST', headers, body }))
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter schickt ab, Umschalt+Enter macht eine neue Zeile
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      if (!listening) submit(text)
+    }
   }
+
+  const closeReview = useCallback((changed: boolean) => {
+    setReview(null)
+    textareaRef.current?.focus()
+    if (changed) {
+      changeText('')
+      onChanged()
+    }
+  }, [onChanged])
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <input
+      <form onSubmit={handleSubmit} className={`flex items-end gap-2 ${stacked ? 'flex-wrap justify-end' : ''}`}>
+        <div className={`relative min-w-0 ${stacked ? 'w-full' : 'flex-1'}`}>
+          <label htmlFor="natural-input" className="sr-only">Termine und Aufgaben eingeben</label>
+          <textarea
+            id="natural-input"
+            ref={textareaRef}
+            rows={1}
             value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder={withCalendar ? 'Termin eintragen oder ändern, z. B. „Zahnarzt auf Freitag verschieben“' : 'Termin eintragen, z. B. „Zahnarzt morgen 14 Uhr“'}
+            onChange={e => changeText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            maxLength={MAX_LENGTH}
+            placeholder={listening ? 'Ich höre zu …' : withCalendar
+              ? 'Sag oder tippe alles auf einmal: Termine, Aufgaben, Änderungen'
+              : 'Sag oder tippe Termine und Aufgaben, auch mehrere auf einmal'}
             disabled={loading}
-            className="w-full h-12 bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.75)] px-4 text-[15px] focus:outline-none focus:border-accent"
+            // Während der Aufnahme schreibt die Erkennung ins Feld; Tippen ginge dabei verloren
+            readOnly={listening}
+            className="block w-full min-h-12 max-h-48 lg:max-h-72 resize-none overflow-y-auto bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.75)] px-4 py-3 text-[15px] leading-6 focus:outline-none focus:border-accent"
           />
         </div>
 
@@ -177,9 +270,10 @@ export default function NaturalInput({ onChanged }: Props) {
           <button
             type="button"
             onClick={toggleMic}
-            aria-label={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
-            title={listening ? 'Aufnahme stoppen' : 'Spracherkennung starten'}
-            className={`w-12 h-12 shrink-0 rounded-[calc(var(--app-radius)*0.75)] flex items-center justify-center transition-colors ${
+            disabled={loading}
+            aria-label={listening ? 'Aufnahme stoppen und auswerten' : 'Spracherkennung starten'}
+            title={listening ? 'Aufnahme stoppen und auswerten' : 'Spracherkennung starten'}
+            className={`w-12 h-12 shrink-0 rounded-[calc(var(--app-radius)*0.75)] flex items-center justify-center transition-colors disabled:opacity-40 ${
               listening ? 'bg-danger text-on-danger animate-pulse' : 'bg-accent text-on-accent hover:opacity-90'
             }`}
           >
@@ -189,54 +283,20 @@ export default function NaturalInput({ onChanged }: Props) {
 
         <button
           type="submit"
-          disabled={loading || !text.trim()}
-          aria-label="Hinzufügen"
-          title="Hinzufügen"
+          disabled={loading || listening || !text.trim()}
+          aria-label="Auswerten"
+          title="Auswerten"
           className="w-12 h-12 shrink-0 rounded-[calc(var(--app-radius)*0.75)] bg-surface-2 text-ink flex items-center justify-center hover:bg-line transition-colors disabled:opacity-40"
         >
           {loading ? <span className="text-sm">…</span> : <Icon name="send" size={20} />}
         </button>
       </form>
+      {listening && <p role="status" className="mt-2 text-xs text-muted">Sprich einfach drauflos. Zum Auswerten auf das Mikrofon tippen.</p>}
+      {loading && <p role="status" className="mt-2 text-xs text-muted">Werte aus …</p>}
       {error && <p role="status" className="mt-2 text-xs text-danger">{error}</p>}
 
-      {preview && preview.action !== 'delete' && (
-        <EventModal
-          mode={preview.action === 'update' ? 'edit' : 'create'}
-          heading={preview.action === 'update' ? 'Änderung prüfen' : 'Vorschlag prüfen'}
-          note={preview.action === 'update' && preview.current.rrule
-          ? `${preview.message} Achtung: Das ändert die ganze Serie, nicht nur einen Termin.`
-          : preview.message}
-          previous={preview.action === 'update' ? describe(preview.current) : undefined}
-          initial={{
-          ...preview.event,
-          startTime: toLocalInput(preview.event.startTime),
-          endTime: toLocalInput(preview.event.endTime),
-          id: preview.action === 'update' ? preview.eventId : undefined,
-        }}
-          onSave={save}
-          onClose={() => setPreview(null)}
-        />
-      )}
-
-      {preview?.action === 'delete' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setPreview(null)}>
-          <div role="dialog" aria-label="Löschen bestätigen" className="bg-surface text-ink rounded-[var(--app-radius)] shadow-2xl w-full max-w-md mx-4 p-6 animate-scale-in" onClick={e => e.stopPropagation()}>
-            <h2 className="font-head text-lg font-bold mb-3">Termin löschen?</h2>
-            {preview.message && <p className="text-sm text-muted mb-2">{preview.message}</p>}
-            <p className="text-sm font-semibold bg-surface-2 rounded-[calc(var(--app-radius)*0.6)] px-4 py-3">{describe(preview.current)}</p>
-            {preview.current.rrule && <p className="text-xs text-muted mt-2">Das löscht die ganze Serie mit allen Schritten.</p>}
-            <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setPreview(null)} className="h-11 px-4 rounded-[calc(var(--app-radius)*0.6)] text-sm font-semibold text-muted hover:bg-surface-2">Abbrechen</button>
-              <button
-                onClick={() => confirm(() => fetch(`/api/events/${preview.eventId}`, { method: 'DELETE' }))}
-              disabled={saving}
-                className="h-11 px-5 rounded-[calc(var(--app-radius)*0.6)] text-sm bg-danger text-on-danger hover:opacity-90 font-semibold"
-              >
-                Löschen
-              </button>
-            </div>
-          </div>
-        </div>
+      {review && (
+        <ProposalReview transcript={review.transcript} proposals={review.proposals} notes={review.notes} onClose={closeReview} />
       )}
     </div>
   )
