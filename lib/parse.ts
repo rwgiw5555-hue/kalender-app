@@ -17,6 +17,7 @@ const MODEL = 'claude-sonnet-5-5'
 const CONTEXT_DAYS_BACK = 14
 const CONTEXT_DAYS_AHEAD = 60
 const MAX_CONTEXT_EVENTS = 200
+const MAX_CONTEXT_TASKS = 100
 
 const dateTimeFmt = new Intl.DateTimeFormat('de-DE', {
   timeZone: TIME_ZONE, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -54,10 +55,11 @@ const RESPONSE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['action', 'eventId', 'event', 'task', 'message'],
+        required: ['action', 'eventId', 'taskId', 'event', 'task', 'message'],
         properties: {
           action: { type: 'string', enum: ['create', 'update', 'delete', 'task'] },
           eventId: nullable({ type: 'integer' }),
+          taskId: nullable({ type: 'integer' }),
           event: nullable({
             type: 'object',
             additionalProperties: false,
@@ -98,9 +100,49 @@ interface ContextEvent {
   rrule: string | null
 }
 
+interface ContextTask {
+  id: number
+  title: string
+  date: string | null
+  rrule: string | null
+}
+
+interface Context {
+  events: ContextEvent[]
+  tasks: ContextTask[]
+}
+
+async function loadContext(): Promise<Context> {
+  const [events, tasks] = await Promise.all([loadEvents(), loadTasks()])
+  return { events, tasks }
+}
+
+// Offene Aufgaben (ohne Schritte von Routinen): nur Titel, Datum und Wiederholung
+async function loadTasks(): Promise<ContextTask[]> {
+  const tasks = await prisma.task.findMany({
+    where: { eventId: null },
+    select: { id: true, title: true, date: true, rrule: true, completions: { select: { id: true }, take: 1 } },
+    orderBy: [{ position: 'asc' }, { id: 'asc' }],
+  })
+  return tasks
+    // Einmalige Aufgaben nur, solange sie nicht erledigt sind; wiederkehrende immer
+    .filter(t => t.rrule !== null || t.completions.length === 0)
+    .slice(0, MAX_CONTEXT_TASKS)
+    .map(({ id, title, date, rrule }) => ({ id, title, date, rrule }))
+}
+
+// Zeilenumbrüche (auch \r, U+2028/2029), Trenner und spitze Klammern entfernen,
+// damit ein Titel keine eigene Kontextzeile vortäuschen kann
+const cleanTitle = (title: string) => title.replace(/[\r\n\u2028\u2029|<>]/g, ' ')
+
+function repeatText(rrule: string | null): string {
+  const rule = parseRecurrence(rrule)
+  return rule.ok && rule.value ? `${describeRecurrence(rule.value)}${rule.value.until ? ` bis ${rule.value.until}` : ''}` : ''
+}
+
 // Termine im Zeitraum um heute: nur Titel, Zeit, Kategorie und Wiederholung,
 // keine Beschreibungen
-async function loadContext(): Promise<ContextEvent[]> {
+async function loadEvents(): Promise<ContextEvent[]> {
   const today = localDate(new Date())
   const fromDay = addDays(today, -CONTEXT_DAYS_BACK)
   // Einen Tag Puffer, damit Termine kurz nach Mitternacht (deutsche Zeit) nicht fehlen
@@ -128,26 +170,35 @@ async function loadContext(): Promise<ContextEvent[]> {
 function contextLines(events: ContextEvent[]): string {
   if (events.length === 0) return '(keine Termine im Zeitraum)'
   return events.map(e => {
-    const rule = parseRecurrence(e.rrule)
-    const repeat = rule.ok && rule.value
-      ? ` | Wiederholung: ${describeRecurrence(rule.value)}${rule.value.until ? ` bis ${rule.value.until}` : ''}`
-      : ''
-    // Zeilenumbrüche (auch \r, U+2028/2029), Trenner und spitze Klammern entfernen,
-    // damit ein Titel keine eigene Kontextzeile vortäuschen kann
-    const title = e.title.replace(/[\r\n\u2028\u2029|<>]/g, ' ')
-    return `#${e.id} | ${title} | ${dateTimeFmt.format(e.startTime)}–${timeFmt.format(e.endTime)} | ${e.category ?? 'Sonstiges'}${repeat}`
+    const repeat = repeatText(e.rrule)
+    return `#${e.id} | ${cleanTitle(e.title)} | ${dateTimeFmt.format(e.startTime)}–${timeFmt.format(e.endTime)} | ${e.category ?? 'Sonstiges'}${repeat ? ` | Wiederholung: ${repeat}` : ''}`
   }).join('\n')
 }
 
-function buildPrompt(text: string, context: ContextEvent[] | null): string {
+function taskLines(tasks: ContextTask[]): string {
+  if (tasks.length === 0) return '(keine offenen Aufgaben)'
+  return tasks.map(t => {
+    const repeat = repeatText(t.rrule)
+    return `#${t.id} | ${cleanTitle(t.title)} | ${t.date ? `fällig ${t.date}` : 'ohne Datum'}${repeat ? ` | Wiederholung: ${repeat}` : ''}`
+  }).join('\n')
+}
+
+function buildPrompt(text: string, context: Context | null): string {
   const calendar = context
     ? `Bestehende Termine des Nutzers (ID | Titel | Beginn–Ende | Kategorie | Wiederholung):
 <kalender>
-${contextLines(context)}
+${contextLines(context.events)}
 </kalender>
 
+Offene Aufgaben des Nutzers (ID | Titel | fällig | Wiederholung):
+<aufgaben>
+${taskLines(context.tasks)}
+</aufgaben>
+
+Soll eine dieser Aufgaben eingeplant werden („plan Steuer machen für Freitag ein“, „plan meine Aufgaben für morgen ein“), lege je Aufgabe einen Termin an: action "create" mit taskId der Aufgabe und ihrem Titel. Wähle freie Zeiten, die sich nicht mit bestehenden Terminen überschneiden, tagsüber zwischen 8 und 20 Uhr, mit sinnvoller Dauer (ohne Angabe 1 Stunde). Die Aufgabe selbst bleibt bestehen; lege sie nicht noch einmal als Aufgabe an. Nennt der Nutzer eine Aufgabe, die schon in der Liste steht, lege sie nicht doppelt an.
+
 Bezieht sich etwas auf einen dieser Termine (verschieben, umbenennen, verlängern, absagen, löschen), nimm ein Element mit action "update" oder "delete" und der passenden eventId. Bei "update" enthält event den vollständigen neuen Stand des Termins (unveränderte Felder übernehmen, description null lassen). Bei einer Serie ändert "update" die ganze Serie; startTime/endTime sind dann der Beginn der Serie. Ist nicht eindeutig, welcher Termin gemeint ist, kein Element anlegen, sondern in notes kurz nachfragen.`
-    : 'Du siehst den Kalender des Nutzers nicht. Soll ein bestehender Termin geändert oder gelöscht werden, kein Element anlegen, sondern in notes schreiben, dass dafür in den Einstellungen „KI darf Termine sehen“ eingeschaltet werden muss.'
+    : 'Du siehst weder den Kalender noch die Aufgabenliste des Nutzers. Soll ein bestehender Termin geändert oder gelöscht oder eine bestehende Aufgabe eingeplant werden, kein Element anlegen, sondern in notes schreiben, dass dafür in den Einstellungen „KI darf Termine und Aufgaben sehen“ eingeschaltet werden muss.'
 
   return `Du bist der Assistent eines deutschen Kalenders mit Aufgabenliste. Jetzt ist ${nowInBerlin()} (Zeitzone ${TIME_ZONE}).
 
@@ -157,8 +208,8 @@ Der Nutzer hat folgenden Text gesprochen oder getippt, oft eine längere Sprachn
 ${calendar}
 
 Zieh ALLE Termine und Aufgaben aus dem Text heraus, jeweils als eigenes Element in items, in der Reihenfolge, in der sie vorkommen:
-- Termin (etwas mit Uhrzeit oder festem Tag, an dem man irgendwo ist oder etwas stattfindet): action "create", event ausgefüllt, eventId und task null.
-- Aufgabe (etwas, das man erledigen und abhaken will, z. B. „Milch kaufen“, „Steuer machen“, „Bad putzen“): action "task", task ausgefüllt, eventId und event null. task.date nur, wenn ein Tag genannt ist („morgen“, „bis Freitag“ = dieser Tag), sonst null. Wiederkehrende Aufgaben („jeden Sonntag Bad putzen“) mit rrule.
+- Termin (etwas mit Uhrzeit oder festem Tag, an dem man irgendwo ist oder etwas stattfindet): action "create", event ausgefüllt, eventId, task und taskId null (taskId nur beim Einplanen einer bestehenden Aufgabe).
+- Aufgabe (etwas, das man erledigen und abhaken will, z. B. „Milch kaufen“, „Steuer machen“, „Bad putzen“): action "task", task ausgefüllt, eventId, taskId und event null. task.date nur, wenn ein Tag genannt ist („morgen“, „bis Freitag“ = dieser Tag), sonst null. Wiederkehrende Aufgaben („jeden Sonntag Bad putzen“) mit rrule.
 - Zeiten als ISO-8601 mit Zeitzonen-Offset, z. B. 2026-10-01T14:00:00+02:00. Ohne Dauer: 1 Stunde. Relative Angaben („morgen“, „nächsten Freitag“) vom heutigen Datum aus rechnen.
 - Wiederholungen („jeden Montag“, „werktags“, „alle zwei Wochen“, „monatlich“) als rrule; byweekday nur bei freq "weekly" (werktags = weekly mit mo–fr), sonst null; interval nur wenn größer als 1, sonst null; until nur wenn ein Ende genannt ist, sonst null. Bei neuen Serien sind startTime/endTime das erste Vorkommen ab heute.
 - Titel kurz und ohne Datum oder Uhrzeit, z. B. „Zahnarzt“, „Milch kaufen“.
@@ -168,7 +219,8 @@ Zieh ALLE Termine und Aufgaben aus dem Text heraus, jeweils als eigenes Element 
 }
 
 export type Proposal =
-  | { action: 'create'; event: EventInput; message: string }
+  // forTask: Termin plant eine bestehende Aufgabe ein (die Aufgabe bleibt unverändert)
+  | { action: 'create'; event: EventInput; message: string; forTask?: { id: number; title: string } }
   | { action: 'update'; eventId: number; event: EventInput; message: string }
   | { action: 'delete'; eventId: number; message: string }
   | { action: 'task'; task: TaskInput; message: string }
@@ -179,6 +231,7 @@ type RawRule = Record<string, unknown> | null | undefined
 interface RawItem {
   action?: unknown
   eventId?: unknown
+  taskId?: unknown
   event?: (Record<string, unknown> & { rrule?: RawRule }) | null
   task?: (Record<string, unknown> & { rrule?: RawRule }) | null
   message?: unknown
@@ -247,7 +300,8 @@ export async function parseCommand(text: unknown, withCalendar: boolean): Promis
   if (items.length > MAX_ITEMS) notes.push(`Nur die ersten ${MAX_ITEMS} Vorschläge werden gezeigt.`)
 
   // Beschreibung und Farbe hat Claude nie gesehen: bei Änderungen die gespeicherten behalten
-  const shownIds = new Set(context?.map(e => e.id) ?? [])
+  const shownIds = new Set(context?.events.map(e => e.id) ?? [])
+  const shownTasks = new Map(context?.tasks.map(t => [t.id, t]) ?? [])
   const updateIds = items.flatMap(i => (i.action === 'update' && typeof i.eventId === 'number' && shownIds.has(i.eventId) ? [i.eventId] : []))
   const existing = new Map(
     (updateIds.length
@@ -305,7 +359,9 @@ export async function parseCommand(text: unknown, withCalendar: boolean): Promis
       }
       proposals.push({ action, eventId, event: { ...result.data, description: stored.description, color: stored.color }, message })
     } else {
-      proposals.push({ action: 'create', event: result.data, message })
+      // Einplanen nur für Aufgaben, die Claude gezeigt wurden
+      const task = typeof item.taskId === 'number' ? shownTasks.get(item.taskId) : undefined
+      proposals.push({ action: 'create', event: result.data, message, ...(task ? { forTask: { id: task.id, title: task.title } } : {}) })
     }
   }
   if (invalid) notes.push(invalid === 1 ? 'Ein Vorschlag war unvollständig und wurde weggelassen.' : `${invalid} Vorschläge waren unvollständig und wurden weggelassen.`)

@@ -24,7 +24,8 @@ export interface ProposedTask {
 }
 
 export type Proposal =
-  | { action: 'create'; message: string; event: ProposedEvent }
+  // forTask: Termin plant eine bestehende Aufgabe ein; die Aufgabe bleibt in der Liste
+  | { action: 'create'; message: string; event: ProposedEvent; forTask?: { id: number; title: string } }
   | { action: 'update'; message: string; eventId: number; event: ProposedEvent; current: ProposedEvent }
   | { action: 'delete'; message: string; eventId: number; current: ProposedEvent }
   | { action: 'task'; message: string; task: ProposedTask }
@@ -280,11 +281,12 @@ function ProposalCard({ item, disabled, onDecide, onEdit, onTaskChange }: CardPr
     <li className={`rounded-[calc(var(--app-radius)*0.75)] border-2 ${border} px-4 py-3 transition-colors`}>
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className={`text-[11px] font-bold uppercase tracking-wider ${p.action === 'delete' ? 'text-danger' : 'text-accent-ink'}`}>{LABEL[p.action]}</p>
+          <p className={`text-[11px] font-bold uppercase tracking-wider ${p.action === 'delete' ? 'text-danger' : 'text-accent-ink'}`}>{p.action === 'create' && p.forTask ? 'Aufgabe einplanen' : LABEL[p.action]}</p>
           <p className={`font-semibold ${p.action === 'delete' ? 'line-through' : ''}`}>{title}</p>
           <p className="text-sm text-muted">{detail}</p>
           {before && <p className="text-xs text-muted mt-0.5">Bisher: {before}</p>}
           {series && <p className="text-xs text-muted mt-0.5">Betrifft die ganze Serie.</p>}
+          {p.action === 'create' && p.forTask && <p className="text-xs text-muted mt-0.5">Aufgabe „{p.forTask.title}“ bleibt in deiner Liste.</p>}
           {item.error && <p role="alert" className="text-xs text-danger mt-1">{item.error}</p>}
         </div>
         {done ? (

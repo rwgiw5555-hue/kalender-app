@@ -12,6 +12,9 @@ interface Props {
 
 // Ca. 2–3 Minuten Sprache; muss zu MAX_LONG_TEXT in lib/parse.ts passen
 const MAX_LENGTH = 6000
+// Automatisch stoppen und auswerten nach so viel Stille (vor dem ersten Wort etwas länger)
+const SILENCE_MS = 5000
+const FIRST_WORDS_MS = 10000
 
 // Minimal-Typen für die Web Speech API (nicht in den TypeScript-Standardtypen)
 interface RecognitionResult {
@@ -76,6 +79,9 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   const heardRef = useRef(false)
   const startedAtRef = useRef(0)
   const quickEndsRef = useRef(0)
+  // Stille-Timer läuft über die automatischen Neustarts hinweg; runningRef: Durchgang aktiv?
+  const silenceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const runningRef = useRef(false)
   const submitRef = useRef<(value: string) => void>(() => {})
 
   function changeText(value: string) {
@@ -128,14 +134,34 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
     startedAtRef.current = Date.now()
     try {
       rec.start()
+      runningRef.current = true
       return true
     } catch {
       return false
     }
   }
 
+  function clearSilence() {
+    if (silenceRef.current) clearTimeout(silenceRef.current)
+    silenceRef.current = null
+  }
+
+  // Nach `ms` ohne neues Wort selbst auf Stopp drücken
+  function armSilence(ms: number) {
+    clearSilence()
+    silenceRef.current = setTimeout(() => {
+      silenceRef.current = null
+      if (!wantRef.current) return
+      wantRef.current = false
+      // Zwischen zwei Durchgängen läuft keine Erkennung, dann kommt kein onend mehr
+      if (runningRef.current) recognitionRef.current?.stop()
+      else finish()
+    }, ms)
+  }
+
   // Aufnahme ist zu Ende: auswerten, außer nach einem Fehler
   function finish() {
+    clearSilence()
     wantRef.current = false
     setListening(false)
     if (abortRef.current) abortRef.current = false
@@ -161,6 +187,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       rec.interimResults = true
       rec.onresult = e => {
         heardRef.current = true
+        if (wantRef.current) armSilence(SILENCE_MS)
         let heard = ''
         for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript
         const value = join(baseRef.current, heard.trim())
@@ -173,6 +200,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
         }
       }
       rec.onend = () => {
+        runningRef.current = false
         // Der Browser beendet die Erkennung nach Pausen oder ca. 1 Minute: weitermachen,
         // solange nicht auf Stopp gedrückt wurde. Endet ein Durchgang mehrmals sofort
         // ohne Ergebnis, aufhören statt endlos neu zu starten.
@@ -209,11 +237,14 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       wantRef.current = false
       setListening(false)
       setError('Spracherkennung ließ sich nicht starten')
+      return
     }
+    armSilence(FIRST_WORDS_MS)
   }
 
   // Aufnahme beenden, wenn die Komponente verschwindet (z. B. Seitenwechsel)
   useEffect(() => () => {
+    clearSilence()
     wantRef.current = false
     abortRef.current = true
     recognitionRef.current?.stop()
@@ -291,7 +322,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
           {loading ? <span className="text-sm">…</span> : <Icon name="send" size={20} />}
         </button>
       </form>
-      {listening && <p role="status" className="mt-2 text-xs text-muted">Sprich einfach drauflos. Zum Auswerten auf das Mikrofon tippen.</p>}
+      {listening && <p role="status" className="mt-2 text-xs text-muted">Sprich einfach drauflos. Nach 5 Sekunden Stille wird automatisch ausgewertet, oder tippe auf das Mikrofon.</p>}
       {loading && <p role="status" className="mt-2 text-xs text-muted">Werte aus …</p>}
       {error && <p role="status" className="mt-2 text-xs text-danger">{error}</p>}
 

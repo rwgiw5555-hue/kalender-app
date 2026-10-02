@@ -9,7 +9,7 @@ import { parseRecurrence } from '@/lib/recurrence'
 // (Termine anlegen, ändern, löschen; Aufgaben anlegen). Gespeichert wird hier nichts;
 // das macht die App erst, wenn der Nutzer einzelne Vorschläge bestätigt.
 // Body: { text, withCalendar } – withCalendar nur, wenn der Nutzer
-// „KI darf Termine sehen“ eingeschaltet hat.
+// „KI darf Termine und Aufgaben sehen“ eingeschaltet hat.
 // Antwort: { proposals: [...], notes: [...] }
 
 type EventFields = Pick<EventInput, 'title' | 'description' | 'startTime' | 'endTime' | 'rrule'> & { category: string | null }
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
   const notes = [...result.notes]
   const proposals = result.proposals.flatMap((p): object[] => {
-    if (p.action === 'create') return [{ action: p.action, message: p.message, event: toClient(p.event) }]
+    if (p.action === 'create') return [{ action: p.action, message: p.message, event: toClient(p.event), ...(p.forTask ? { forTask: p.forTask } : {}) }]
     if (p.action === 'task') {
       const rule = parseRecurrence(p.task.rrule)
       return [{ action: p.action, message: p.message, task: { title: p.task.title, date: p.task.date, rrule: rule.ok ? rule.value : null } }]

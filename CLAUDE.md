@@ -8,7 +8,7 @@ Diese Regeln gelten für jede Änderung an diesem Projekt.
 - **Keine Schlüssel im Repo.** API-Keys stehen nur in `.env` (ignoriert). `.env.example` enthält nur leere Platzhalter.
 - **Server nur privat erreichbar.** `npm run dev` und `npm run start` lauschen nur auf `127.0.0.1`. Zugriff von anderen Geräten nur über ein privates Netz (z. B. Tailscale), nie über einen offenen Port oder eine öffentliche Adresse.
 - **Alle Eingaben prüfen.** API-Routen übernehmen nie den Request-Body direkt in die Datenbank, sondern prüfen ihn über `lib/validation.ts`.
-- **Keine neuen Drittanbieter ohne Rückfrage.** Jeder Dienst, der Termine oder Eingaben zu sehen bekommt (Hosting, KI, Analyse, Sync), muss vorher mit Robert abgestimmt werden. Aktuell bekommt nur die Claude API (Anthropic) den eingegebenen Text zum Auswerten, und nur wenn der Nutzer „KI darf Termine sehen“ einschaltet, zusätzlich Titel, Zeiten, Kategorie und Wiederholung der Termine von 14 Tagen zurück bis 60 Tage voraus (nie Beschreibungen).
+- **Keine neuen Drittanbieter ohne Rückfrage.** Jeder Dienst, der Termine oder Eingaben zu sehen bekommt (Hosting, KI, Analyse, Sync), muss vorher mit Robert abgestimmt werden. Aktuell bekommt nur die Claude API (Anthropic) den eingegebenen Text zum Auswerten, und nur wenn der Nutzer „KI darf Termine und Aufgaben sehen“ einschaltet, zusätzlich Titel, Zeiten, Kategorie und Wiederholung der Termine von 14 Tagen zurück bis 60 Tage voraus (nie Beschreibungen) sowie Titel, Datum und Wiederholung der offenen Aufgaben (ohne Schritte von Routinen).
 - **KI-Vorschläge nie direkt ausführen.** Was Claude aus Text macht, ist ein Vorschlag: Er wird wie jede Eingabe geprüft und erst nach Bestätigung durch den Nutzer gespeichert. Ändern/Löschen nur für Termin-IDs, die Claude im Kontext gezeigt wurden.
 - **Keine Tracking- oder Analyse-Skripte.**
 
@@ -22,3 +22,7 @@ Diese Regeln gelten für jede Änderung an diesem Projekt.
 - **Private Daten bleiben lokal.** Termine, Backups und Exporte liegen nicht auf fremden Servern, auch nicht in privaten Repos oder Cloud-Speichern, außer nach Absprache (abgestimmt ist bisher nur die Claude API wie oben beschrieben). Der eigene Server aus `docs/SERVER.md` ist so eine Absprache und wird erst nach Roberts Zustimmung eingerichtet.
 - **Lücken benennen statt Schutz vortäuschen.** Eine Sicherheitsmaßnahme, die nur behauptet wird, ist schlechter als eine dokumentierte Lücke.
 - **Bei Unsicherheit fragen, nicht raten.**
+
+## Bekannte, bewusst akzeptierte Lücken
+
+- **Spracherkennung des Browsers.** Die Mikrofon-Taste nutzt die Web Speech API. Der Browser schickt den Ton zur Erkennung an seinen Hersteller (Chrome: Google, Edge: Microsoft, Safari: Apple, teils auf dem Gerät). Robert hat das bewusst akzeptiert; die Einstellungen weisen darauf hin. Alternative ohne diesen Weg: tippen oder die Diktierfunktion des Geräts. Kein weiterer Dienst darf Ton oder Text bekommen.
