@@ -8,7 +8,7 @@ export async function alertSaveError(res: Response) {
   window.alert(`Speichern fehlgeschlagen: ${body?.error ?? res.statusText}`)
 }
 
-// Schalter „KI darf Termine sehen“: pro Gerät im Browser gespeichert, Standard aus
+// Schalter „KI darf Termine und Aufgaben sehen“: pro Gerät im Browser gespeichert, Standard aus
 const AI_CONTEXT_KEY = 'ai-calendar-context'
 const AI_CONTEXT_EVENT = 'ai-calendar-context-change'
 
