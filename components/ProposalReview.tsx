@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import EventModal, { EventFormData } from './EventModal'
 import Icon from './Icon'
 import { describeRecurrence, presetKey, PRESETS, Recurrence } from '@/lib/recurrence'
@@ -61,6 +61,8 @@ function taskWhen(t: ProposedTask) {
   return parts.join(' · ')
 }
 
+const isNew = (p: Proposal) => p.action === 'create' || p.action === 'task'
+
 const LABEL: Record<Proposal['action'], string> = { create: 'Neuer Termin', update: 'Termin ändern', delete: 'Termin löschen', task: 'Aufgabe' }
 
 async function errorText(res: Response) {
@@ -93,6 +95,10 @@ export default function ProposalReview({ transcript, proposals, notes, onClose }
   const [items, setItems] = useState<Item[]>(() => proposals.map(p => ({ p, decision: null, status: 'open' })))
   const [editing, setEditing] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+
+  // Beim Öffnen Fokus in die Liste, damit Screenreader sie ansagen
+  useEffect(() => { headingRef.current?.focus() }, [])
 
   const changed = items.some(i => i.status === 'done')
   const pending = items.filter(i => i.status !== 'done')
@@ -147,7 +153,7 @@ export default function ProposalReview({ transcript, proposals, notes, onClose }
       >
         <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3">
           <div>
-            <h2 id="review-title" className="font-head text-lg font-bold">
+            <h2 id="review-title" ref={headingRef} tabIndex={-1} className="font-head text-lg font-bold focus:outline-none">
               {proposals.length === 1 ? '1 Vorschlag' : `${proposals.length} Vorschläge`}
             </h2>
             <p className="text-xs text-muted">Bei jedem Ja oder Nein wählen, bei Bedarf bearbeiten, dann übernehmen.</p>
@@ -191,11 +197,12 @@ export default function ProposalReview({ transcript, proposals, notes, onClose }
         <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-4 border-t border-line">
           <button
             type="button"
-            onClick={() => setItems(list => list.map(item => (item.status === 'done' ? item : { ...item, decision: 'yes', status: 'open', error: undefined })))}
-            disabled={busy || pending.length === 0}
+            // Nur Neues (Termine, Aufgaben): Ändern und Löschen immer einzeln bestätigen
+            onClick={() => setItems(list => list.map(item => (item.status === 'done' || !isNew(item.p) ? item : { ...item, decision: 'yes', status: 'open', error: undefined })))}
+            disabled={busy || !pending.some(i => isNew(i.p))}
             className="h-11 px-4 mr-auto rounded-[calc(var(--app-radius)*0.6)] text-sm font-semibold text-accent-ink hover:bg-surface-2 disabled:opacity-40"
           >
-            Alle Ja
+            Alle neuen Ja
           </button>
           <button type="button" onClick={() => onClose(changed)} disabled={busy} className="h-11 px-4 rounded-[calc(var(--app-radius)*0.6)] text-sm font-semibold text-muted hover:bg-surface-2">
             {changed ? 'Fertig' : 'Abbrechen'}
@@ -336,6 +343,7 @@ function TaskEditor({ task, onSave, onCancel }: { task: ProposedTask; onSave: (t
   const [date, setDate] = useState(task.date ?? '')
   const initialKey = presetKey(task.rrule)
   const [repeat, setRepeat] = useState(initialKey)
+  const titleId = useId()
 
   function save(e: React.FormEvent) {
     e.preventDefault()
@@ -347,9 +355,19 @@ function TaskEditor({ task, onSave, onCancel }: { task: ProposedTask; onSave: (t
 
   const field = 'h-11 text-sm px-3 rounded-[calc(var(--app-radius)*0.6)] bg-surface-2 text-ink border border-transparent focus:border-accent focus:outline-none'
   return (
-    <form onSubmit={save} className="mt-3 flex flex-col gap-2">
-      <label className="sr-only" htmlFor="task-edit-title">Titel</label>
-      <input id="task-edit-title" value={title} onChange={e => setTitle(e.target.value)} maxLength={200} className={field} autoFocus />
+    <form
+      onSubmit={save}
+      // Escape bricht nur das Bearbeiten ab, nicht die ganze Liste
+      onKeyDown={e => {
+        if (e.key === 'Escape') {
+          e.stopPropagation()
+          onCancel()
+        }
+      }}
+      className="mt-3 flex flex-col gap-2"
+    >
+      <label className="sr-only" htmlFor={titleId}>Titel</label>
+      <input id={titleId} value={title} onChange={e => setTitle(e.target.value)} maxLength={200} className={field} autoFocus />
       <div className="flex flex-wrap gap-2">
         <label className="flex items-center gap-2 text-sm text-muted">
           Tag

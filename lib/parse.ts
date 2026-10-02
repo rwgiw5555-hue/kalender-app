@@ -319,6 +319,8 @@ export async function parseEventText(text: unknown): Promise<{ ok: true; data: E
   const result = await parseCommand(text, false)
   if (!result.ok) return result
   if (result.proposals.length > 1) return { ok: false, status: 409, error: 'Mehrere Einträge erkannt' }
+  // Ist etwas unklar geblieben (z. B. ein zweiter Termin ohne Tag), nichts still speichern
+  if (result.notes.length) return { ok: false, status: 422, error: result.notes[0].replace(/[.!?]+$/, '') }
   const p = result.proposals[0]
   if (!p || p.action !== 'create') return { ok: false, status: 422, error: 'Termin nicht erkannt' }
   return { ok: true, data: p.event }

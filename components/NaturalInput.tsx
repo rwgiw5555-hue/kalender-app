@@ -71,6 +71,11 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   const wantRef = useRef(false)
   const textRef = useRef('')
   const abortRef = useRef(false)
+  // Neustart-Kontrolle: automatischer Durchgang?, schon etwas gehört?, Startzeit, sofortige Abbrüche
+  const autoRef = useRef(false)
+  const heardRef = useRef(false)
+  const startedAtRef = useRef(0)
+  const quickEndsRef = useRef(0)
   const submitRef = useRef<(value: string) => void>(() => {})
 
   function changeText(value: string) {
@@ -113,15 +118,28 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   }, [withCalendar])
   useEffect(() => { submitRef.current = submit }, [submit])
 
-  function startRecognition() {
+  // Ein Erkennungs-Durchgang; false, wenn der Browser den Start verweigert
+  function startRecognition(auto: boolean): boolean {
     const rec = recognitionRef.current
-    if (!rec) return
+    if (!rec) return false
     baseRef.current = textRef.current.trim()
+    autoRef.current = auto
+    heardRef.current = false
+    startedAtRef.current = Date.now()
     try {
       rec.start()
+      return true
     } catch {
-      // läuft bereits
+      return false
     }
+  }
+
+  // Aufnahme ist zu Ende: auswerten, außer nach einem Fehler
+  function finish() {
+    wantRef.current = false
+    setListening(false)
+    if (abortRef.current) abortRef.current = false
+    else submitRef.current(textRef.current)
   }
 
   function toggleMic() {
@@ -136,36 +154,48 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       if (!SR) return
       const rec = new SR()
       rec.lang = 'de-DE'
-      // Längere Sprachnachrichten: weiterhören bis „Stopp“, Zwischenstand anzeigen
-      rec.continuous = true
+      // Längere Sprachnachrichten: weiterhören bis „Stopp“, Zwischenstand anzeigen.
+      // Chrome auf Android liefert im Dauerbetrieb doppelte Ergebnisse; dort Satz für
+      // Satz erkennen und automatisch neu starten.
+      rec.continuous = !/Android/i.test(navigator.userAgent)
       rec.interimResults = true
       rec.onresult = e => {
+        heardRef.current = true
         let heard = ''
         for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript
-        changeText(join(baseRef.current, heard.trim()).slice(0, MAX_LENGTH))
+        const value = join(baseRef.current, heard.trim())
+        changeText(value.slice(0, MAX_LENGTH))
+        if (value.length >= MAX_LENGTH && wantRef.current) {
+          // Längenlimit erreicht: nichts mehr still verwerfen, sondern auswerten
+          wantRef.current = false
+          setError('Maximale Länge erreicht – der Rest bitte in einer zweiten Nachricht.')
+          rec.stop()
+        }
       }
       rec.onend = () => {
         // Der Browser beendet die Erkennung nach Pausen oder ca. 1 Minute: weitermachen,
-        // solange nicht auf Stopp gedrückt wurde
-        if (wantRef.current && textRef.current.length < MAX_LENGTH) {
-          startRecognition()
-          return
+        // solange nicht auf Stopp gedrückt wurde. Endet ein Durchgang mehrmals sofort
+        // ohne Ergebnis, aufhören statt endlos neu zu starten.
+        if (wantRef.current) {
+          const quick = !heardRef.current && Date.now() - startedAtRef.current < 1500
+          quickEndsRef.current = quick ? quickEndsRef.current + 1 : 0
+          if (quickEndsRef.current < 3 && startRecognition(true)) return
         }
-        wantRef.current = false
-        setListening(false)
-        // Nach einem Fehler nichts automatisch abschicken
-        if (abortRef.current) abortRef.current = false
-        else submitRef.current(textRef.current)
+        finish()
       }
       rec.onerror = e => {
         if (e.error === 'no-speech' || e.error === 'aborted') return // onend startet neu bzw. beendet
         wantRef.current = false
+        if ((e.error === 'not-allowed' || e.error === 'service-not-allowed') && autoRef.current) {
+          // Neustart ohne Tippen verweigert (z. B. Safari): Aufnahme normal beenden und auswerten
+          return
+        }
         abortRef.current = true
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
           setBlocked(true)
           setError('Mikrofon nicht verfügbar – nutze die Diktier-Taste der Tastatur')
         } else {
-          setError('Spracherkennung unterbrochen')
+          setError('Spracherkennung unterbrochen – der Text bleibt stehen, mit dem Pfeil auswerten')
         }
       }
       recognitionRef.current = rec
@@ -173,8 +203,13 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
     setError('')
     wantRef.current = true
     abortRef.current = false
+    quickEndsRef.current = 0
     setListening(true)
-    startRecognition()
+    if (!startRecognition(false)) {
+      wantRef.current = false
+      setListening(false)
+      setError('Spracherkennung ließ sich nicht starten')
+    }
   }
 
   // Aufnahme beenden, wenn die Komponente verschwindet (z. B. Seitenwechsel)
@@ -200,6 +235,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
 
   const closeReview = useCallback((changed: boolean) => {
     setReview(null)
+    textareaRef.current?.focus()
     if (changed) {
       changeText('')
       onChanged()
@@ -223,6 +259,8 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
               ? 'Sag oder tippe alles auf einmal: Termine, Aufgaben, Änderungen'
               : 'Sag oder tippe Termine und Aufgaben, auch mehrere auf einmal'}
             disabled={loading}
+            // Während der Aufnahme schreibt die Erkennung ins Feld; Tippen ginge dabei verloren
+            readOnly={listening}
             className="block w-full min-h-12 max-h-48 lg:max-h-72 resize-none overflow-y-auto bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.75)] px-4 py-3 text-[15px] leading-6 focus:outline-none focus:border-accent"
           />
         </div>
