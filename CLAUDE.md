@@ -19,6 +19,6 @@ Diese Regeln gelten für jede Änderung an diesem Projekt.
 - **Ein Commit ist praktisch nicht löschbar.** Vor jedem Commit prüfen, was mitkommt (`git add -A --dry-run`). Ist doch ein Geheimnis im Verlauf gelandet, gilt es als verbrannt: Schlüssel sofort erneuern, das Entfernen der Datei reicht nicht.
 - **Geheimnisse nie ausgeben.** Weder im Chat noch in Logs, Fehlermeldungen oder Doku. Zum Prüfen nur „vorhanden ja/nein“ und die Form, nie den Wert.
 - **Sicherung vor jedem Eingriff in Daten.** Vor Migrationen, Umrechnungen oder Löschungen wird die Datenbank außerhalb des Repos kopiert. Destruktive Befehle (`prisma migrate reset`, `prisma db push` mit Datenverlust, `git reset --hard`, `git clean`, Force-Push) nur nach ausdrücklicher Zustimmung.
-- **Private Daten bleiben lokal.** Termine, Backups und Exporte liegen nicht auf fremden Servern, auch nicht in privaten Repos oder Cloud-Speichern, außer nach Absprache. Der eigene Server aus `docs/SERVER.md` ist so eine Absprache und wird erst nach Roberts Zustimmung eingerichtet.
+- **Private Daten bleiben lokal.** Termine, Backups und Exporte liegen nicht auf fremden Servern, auch nicht in privaten Repos oder Cloud-Speichern, außer nach Absprache (abgestimmt ist bisher nur die Claude API wie oben beschrieben). Der eigene Server aus `docs/SERVER.md` ist so eine Absprache und wird erst nach Roberts Zustimmung eingerichtet.
 - **Lücken benennen statt Schutz vortäuschen.** Eine Sicherheitsmaßnahme, die nur behauptet wird, ist schlechter als eine dokumentierte Lücke.
 - **Bei Unsicherheit fragen, nicht raten.**

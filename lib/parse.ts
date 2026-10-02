@@ -166,7 +166,7 @@ function describeError(e: unknown): string {
     }
     const extra = cur as Error & { status?: unknown; code?: unknown }
     const tags = [extra.status, extra.code].filter(v => typeof v === 'string' || typeof v === 'number')
-    parts.push(`${cur.name}${tags.length ? ` [${tags.join(' ')}]` : ''}: ${cur.message.slice(0, 200)}`)
+    parts.push(`${cur.name}${tags.length ? ` [${tags.join(' ')}]` : ''}: ${String(cur.message).slice(0, 200)}`)
     cur = cur.cause
   }
   return parts.join(' ← ')
