@@ -319,6 +319,11 @@ export async function parseCommand(text: unknown, withCalendar: boolean, file?: 
     raw = JSON.parse(block && block.type === 'text' ? block.text : '')
   } catch (e) {
     if (e instanceof SyntaxError) return { ok: false, status: 422, error: 'Nichts erkannt' }
+    // Anfrage von der API abgelehnt, z. B. Datei zu groß oder zu viele Seiten
+    if (e instanceof Anthropic.BadRequestError) {
+      console.error('parseCommand:', describeError(e))
+      return { ok: false, status: 422, error: file ? 'Datei konnte nicht gelesen werden (zu groß oder zu viele Seiten?)' : 'Text konnte nicht ausgewertet werden' }
+    }
     console.error('parseCommand:', describeError(e))
     return { ok: false, status: 502, error: 'KI-Dienst nicht erreichbar' }
   }

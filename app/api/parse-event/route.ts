@@ -11,9 +11,14 @@ import { proposalsForClient } from '@/lib/proposals'
 // „KI darf Termine und Aufgaben sehen“ eingeschaltet hat.
 // Antwort: { proposals: [...], notes: [...] }
 
+// Text bis 6000 Zeichen, großzügig für JSON und Umlaute
+const MAX_BODY_BYTES = 64 * 1024
+
 export async function POST(req: Request) {
   const denied = rejectForeign(req)
   if (denied) return denied
+  const length = Number(req.headers.get('content-length') ?? NaN)
+  if (Number.isFinite(length) && length > MAX_BODY_BYTES) return NextResponse.json({ error: 'Text zu lang' }, { status: 413 })
   const body = await readJson(req)
   const b = typeof body === 'object' && body !== null ? (body as { text?: unknown; withCalendar?: unknown }) : {}
 

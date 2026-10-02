@@ -19,7 +19,9 @@ const FIRST_WORDS_MS = 10000
 // Import: PDF und Fotos, höchstens 10 MB (wie in app/api/import-file)
 const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_BYTES = 10 * 1024 * 1024
-// Größere Fotos vorher verkleinern: Claude rechnet ohnehin mit ca. 1600 px, spart Upload und Kosten
+// Fotos: Claude nimmt höchstens ca. 3,75 MB; größere oder sehr große Bilder vorher verkleinern
+// (Claude rechnet ohnehin mit ca. 1600 px, spart Upload und Kosten)
+const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024
 const MAX_IMAGE_EDGE = 2000
 
 function readBase64(blob: Blob): Promise<string> {
@@ -36,11 +38,21 @@ async function shrinkImage(file: File): Promise<{ blob: Blob; type: string }> {
   try {
     const bitmap = await createImageBitmap(file)
     const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height))
-    if (scale === 1 && file.size < 4 * 1024 * 1024) return { blob: file, type: file.type }
+    if (scale === 1 && file.size <= MAX_IMAGE_BYTES) {
+      bitmap.close()
+      return { blob: file, type: file.type }
+    }
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(bitmap.width * scale)
     canvas.height = Math.round(bitmap.height * scale)
-    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    const g = canvas.getContext('2d')
+    if (g) {
+      // Weißer Hintergrund: JPEG kennt keine Transparenz (sonst wird sie schwarz)
+      g.fillStyle = '#fff'
+      g.fillRect(0, 0, canvas.width, canvas.height)
+      g.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    }
+    bitmap.close()
     const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', 0.85))
     return blob ? { blob, type: 'image/jpeg' } : { blob: file, type: file.type }
   } catch {
@@ -97,6 +109,8 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   const [review, setReview] = useState<Review | null>(null)
   const [busyText, setBusyText] = useState('Werte aus …')
   const [dragging, setDragging] = useState(false)
+  // Zähler für dragenter/dragleave: Kindelemente lösen eigene Ereignisse aus (sonst Flackern)
+  const dragDepth = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const available = useSyncExternalStore(noSubscribe, () => getRecognition() !== null, () => false)
   const speechSupported = available && !blocked
@@ -175,8 +189,8 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
     setBusyText(`Lese „${file.name}“ …`)
     try {
       const { blob, type } = file.type.startsWith('image/') ? await shrinkImage(file) : { blob: file, type: file.type }
-      if (blob.size > MAX_FILE_BYTES) {
-        setError('Datei zu groß (höchstens 10 MB)')
+      if (blob.size > (type.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_FILE_BYTES)) {
+        setError(type.startsWith('image/') ? 'Foto zu groß (höchstens ca. 3,5 MB)' : 'Datei zu groß (höchstens 10 MB)')
         setLoading(false)
         return
       }
@@ -191,6 +205,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
+    dragDepth.current = 0
     setDragging(false)
     const file = e.dataTransfer.files[0]
     if (file) importFile(file)
@@ -315,6 +330,19 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
     armSilence(FIRST_WORDS_MS)
   }
 
+  // Daneben fallen gelassene Dateien nicht vom Browser öffnen lassen (sonst ist die App weg)
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault()
+    }
+    window.addEventListener('dragover', block)
+    window.addEventListener('drop', block)
+    return () => {
+      window.removeEventListener('dragover', block)
+      window.removeEventListener('drop', block)
+    }
+  }, [])
+
   // Aufnahme beenden, wenn die Komponente verschwindet (z. B. Seitenwechsel)
   useEffect(() => () => {
     clearSilence()
@@ -349,13 +377,18 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   return (
     <div
       // Am PC: Datei aufs Eingabefeld ziehen
-      onDragOver={e => {
+      onDragEnter={e => {
         if (!e.dataTransfer.types.includes('Files')) return
-        e.preventDefault()
-        setDragging(true)
+        dragDepth.current++
+        if (!loading && !listening) setDragging(true)
+      }}
+      onDragOver={e => {
+        if (e.dataTransfer.types.includes('Files')) e.preventDefault()
       }}
       onDragLeave={e => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+        if (!e.dataTransfer.types.includes('Files')) return
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (dragDepth.current === 0) setDragging(false)
       }}
       onDrop={handleDrop}
       className={`rounded-[calc(var(--app-radius)*0.75)] transition-shadow ${dragging ? 'ring-2 ring-accent ring-offset-4 ring-offset-bg' : ''}`}
@@ -372,7 +405,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
             onChange={e => changeText(e.target.value)}
             onKeyDown={handleKeyDown}
             maxLength={MAX_LENGTH}
-            placeholder={listening ? 'Ich höre zu …' : withCalendar
+            placeholder={dragging ? 'Datei hier loslassen zum Importieren' : listening ? 'Ich höre zu …' : withCalendar
               ? 'Sag oder tippe alles auf einmal: Termine, Aufgaben, Änderungen'
               : 'Sag oder tippe Termine und Aufgaben, auch mehrere auf einmal'}
             disabled={loading}
@@ -432,7 +465,6 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       </form>
       {listening && <p role="status" className="mt-2 text-xs text-muted">Sprich einfach drauflos. Nach 5 Sekunden Stille wird automatisch ausgewertet, oder tippe auf das Mikrofon.</p>}
       {loading && <p role="status" className="mt-2 text-xs text-muted">{busyText}</p>}
-      {dragging && <p className="mt-2 text-xs text-accent-ink font-semibold">Loslassen zum Importieren</p>}
       {error && <p role="status" className="mt-2 text-xs text-danger">{error}</p>}
 
       {review && (

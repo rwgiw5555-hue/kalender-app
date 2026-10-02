@@ -10,6 +10,8 @@ import { proposalsForClient } from '@/lib/proposals'
 // Antwort: { proposals: [...], notes: [...] }
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024
+// Claude nimmt Bilder nur bis 5 MB base64, also ca. 3,75 MB Rohdaten
+const MAX_IMAGE_BASE64 = 5 * 1024 * 1024
 // base64 ist ~4/3 so groß; dazu etwas Platz für Text und JSON
 const MAX_BODY_BYTES = Math.ceil((MAX_FILE_BYTES * 4) / 3) + MAX_LONG_TEXT * 4 + 4096
 
@@ -42,7 +44,10 @@ export async function POST(req: Request) {
 
   const mediaType = b.mediaType
   if (typeof mediaType !== 'string' || !(mediaType in SIGNATURES)) return bad('Nur PDF, JPG, PNG, WebP oder GIF')
-  if (typeof b.data !== 'string' || !b.data || !/^[A-Za-z0-9+/]+={0,2}$/.test(b.data)) return bad('Datei fehlt oder ist beschädigt')
+  if (typeof b.data !== 'string' || !b.data || b.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b.data)) {
+    return bad('Datei fehlt oder ist beschädigt')
+  }
+  if (mediaType !== 'application/pdf' && b.data.length > MAX_IMAGE_BASE64) return bad('Foto zu groß (höchstens ca. 3,5 MB)', 413)
 
   const bytes = Buffer.from(b.data, 'base64')
   if (bytes.length > MAX_FILE_BYTES) return bad('Datei zu groß (höchstens 10 MB)', 413)
@@ -52,5 +57,11 @@ export async function POST(req: Request) {
   const text = typeof b.text === 'string' ? b.text : ''
   const result = await parseCommand(text, b.withCalendar === true, { mediaType: type, data: b.data })
   if (!result.ok) return bad(result.error, result.status)
-  return NextResponse.json(await proposalsForClient(result.proposals, result.notes))
+  // Aus fremden Dokumenten nur Neues übernehmen: Ändern und Löschen bestehender
+  // Termine geht nur per Sprache oder Text
+  const proposals = result.proposals.filter(p => p.action === 'create' || p.action === 'task')
+  const notes = proposals.length < result.proposals.length
+    ? [...result.notes, 'Änderungen an bestehenden Terminen werden beim Import nicht übernommen. Bitte per Sprache oder Text sagen.']
+    : result.notes
+  return NextResponse.json(await proposalsForClient(proposals, notes))
 }
