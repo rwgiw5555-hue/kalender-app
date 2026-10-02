@@ -19,6 +19,10 @@ eigenen PC oder einem privaten Server und ist fürs iPhone als Homescreen-App ge
   auch „verschieb den Zahnarzt auf Freitag“, „Zahnarzt absagen“ oder „plan Steuer machen für
   Freitag ein“ (sucht eine freie Zeit, die Aufgabe bleibt in der Liste). Auf dem iPhone per
   Diktier-Taste oder Siri-Kurzbefehl.
+- **Import aus Dateien:** PDF oder Foto (z. B. Stundenplan, Dienstplan, Einladung) über die
+  Büroklammer wählen, am PC auch aufs Eingabefeld ziehen. Claude liest die Datei und macht daraus
+  dieselbe Vorschlagsliste; regelmäßige Termine werden Serien. Höchstens 10 MB, Fotos werden vorher
+  verkleinert. Word-Dateien gehen (noch) nicht: als PDF speichern.
 
 ## Starten auf dem PC
 

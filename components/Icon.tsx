@@ -12,6 +12,7 @@ const PATHS = {
   close: <path d="M18 6L6 18M6 6l12 12" />,
   trash: <><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></>,
   send: <><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>,
+  file: <path d="M21 12.5l-8.4 8.4a5 5 0 0 1-7.1-7.1l8.8-8.8a3.4 3.4 0 0 1 4.8 4.8l-8.8 8.8a1.7 1.7 0 0 1-2.4-2.4l8.1-8.1" />,
   list: <><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></>,
 } as const
 
