@@ -153,6 +153,25 @@ interface RawResponse {
   message?: unknown
 }
 
+// Fehler fürs Server-Log: Meldung plus Ursachenkette (z. B. „Connection error.
+// ← fetch failed ← ENOTFOUND“), damit Netzprobleme sofort erkennbar sind.
+// Nur Name, Status, Code und Meldung, keine Objekte, damit nichts Geheimes im Log landet.
+function describeError(e: unknown): string {
+  const parts: string[] = []
+  let cur: unknown = e
+  for (let depth = 0; cur != null && depth < 4; depth++) {
+    if (!(cur instanceof Error)) {
+      parts.push(String(cur).slice(0, 200))
+      break
+    }
+    const extra = cur as Error & { status?: unknown; code?: unknown }
+    const tags = [extra.status, extra.code].filter(v => typeof v === 'string' || typeof v === 'number')
+    parts.push(`${cur.name}${tags.length ? ` [${tags.join(' ')}]` : ''}: ${String(cur.message).slice(0, 200)}`)
+    cur = cur.cause
+  }
+  return parts.join(' ← ')
+}
+
 // Wandelt einen deutschen Satz über Claude in einen geprüften Vorschlag um.
 // Speichert nichts: Anlegen, Ändern oder Löschen passiert erst, wenn der
 // Nutzer den Vorschlag in der App bestätigt.
@@ -175,7 +194,7 @@ export async function parseCommand(text: unknown, withCalendar: boolean): Promis
     raw = JSON.parse(block && block.type === 'text' ? block.text : '')
   } catch (e) {
     if (e instanceof SyntaxError) return { ok: false, status: 422, error: 'Termin nicht erkannt' }
-    console.error('parseCommand:', e instanceof Error ? e.message : e)
+    console.error('parseCommand:', describeError(e))
     return { ok: false, status: 502, error: 'KI-Dienst nicht erreichbar' }
   }
   if (typeof raw !== 'object' || raw === null) return { ok: false, status: 422, error: 'Termin nicht erkannt' }

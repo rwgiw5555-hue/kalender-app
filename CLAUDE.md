@@ -12,4 +12,13 @@ Diese Regeln gelten für jede Änderung an diesem Projekt.
 - **KI-Vorschläge nie direkt ausführen.** Was Claude aus Text macht, ist ein Vorschlag: Er wird wie jede Eingabe geprüft und erst nach Bestätigung durch den Nutzer gespeichert. Ändern/Löschen nur für Termin-IDs, die Claude im Kontext gezeigt wurden.
 - **Keine Tracking- oder Analyse-Skripte.**
 
-<!-- Hier Roberts eigene Sicherheitsregeln aus dem „Brain“ ergänzen. -->
+## Arbeitsweise (aus Roberts „Brain“)
+
+- **Neue Abhängigkeiten sind fremder Code mit vollen Rechten.** npm-Pakete, Skripte und Erweiterungen nur von bekannten Anbietern und nur nach Rückfrage. Vorher prüfen: Was schreibt es wohin, lädt es etwas nach, hat es Install-Skripte?
+- **Erst lesen, dann ausführen.** Fremde Skripte und Befehle werden vor dem Start gelesen und kurz erklärt.
+- **Ein Commit ist praktisch nicht löschbar.** Vor jedem Commit prüfen, was mitkommt (`git add -A --dry-run`). Ist doch ein Geheimnis im Verlauf gelandet, gilt es als verbrannt: Schlüssel sofort erneuern, das Entfernen der Datei reicht nicht.
+- **Geheimnisse nie ausgeben.** Weder im Chat noch in Logs, Fehlermeldungen oder Doku. Zum Prüfen nur „vorhanden ja/nein“ und die Form, nie den Wert.
+- **Sicherung vor jedem Eingriff in Daten.** Vor Migrationen, Umrechnungen oder Löschungen wird die Datenbank außerhalb des Repos kopiert. Destruktive Befehle (`prisma migrate reset`, `prisma db push` mit Datenverlust, `git reset --hard`, `git clean`, Force-Push) nur nach ausdrücklicher Zustimmung.
+- **Private Daten bleiben lokal.** Termine, Backups und Exporte liegen nicht auf fremden Servern, auch nicht in privaten Repos oder Cloud-Speichern, außer nach Absprache (abgestimmt ist bisher nur die Claude API wie oben beschrieben). Der eigene Server aus `docs/SERVER.md` ist so eine Absprache und wird erst nach Roberts Zustimmung eingerichtet.
+- **Lücken benennen statt Schutz vortäuschen.** Eine Sicherheitsmaßnahme, die nur behauptet wird, ist schlechter als eine dokumentierte Lücke.
+- **Bei Unsicherheit fragen, nicht raten.**
