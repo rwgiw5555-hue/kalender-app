@@ -16,6 +16,50 @@ const MAX_LENGTH = 6000
 const SILENCE_MS = 5000
 const FIRST_WORDS_MS = 10000
 
+// Import: PDF und Fotos, höchstens 10 MB (wie in app/api/import-file)
+const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+// Fotos: Claude nimmt höchstens ca. 3,75 MB; größere oder sehr große Bilder vorher verkleinern
+// (Claude rechnet ohnehin mit ca. 1600 px, spart Upload und Kosten)
+const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024
+const MAX_IMAGE_EDGE = 2000
+
+function readBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function shrinkImage(file: File): Promise<{ blob: Blob; type: string }> {
+  if (file.type === 'image/gif') return { blob: file, type: file.type }
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height))
+    if (scale === 1 && file.size <= MAX_IMAGE_BYTES) {
+      bitmap.close()
+      return { blob: file, type: file.type }
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const g = canvas.getContext('2d')
+    if (g) {
+      // Weißer Hintergrund: JPEG kennt keine Transparenz (sonst wird sie schwarz)
+      g.fillStyle = '#fff'
+      g.fillRect(0, 0, canvas.width, canvas.height)
+      g.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    }
+    bitmap.close()
+    const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, 'image/jpeg', 0.85))
+    return blob ? { blob, type: 'image/jpeg' } : { blob: file, type: file.type }
+  } catch {
+    return { blob: file, type: file.type }
+  }
+}
+
 // Minimal-Typen für die Web Speech API (nicht in den TypeScript-Standardtypen)
 interface RecognitionResult {
   isFinal: boolean
@@ -63,6 +107,11 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   const [error, setError] = useState('')
   const [blocked, setBlocked] = useState(false)
   const [review, setReview] = useState<Review | null>(null)
+  const [busyText, setBusyText] = useState('Werte aus …')
+  const [dragging, setDragging] = useState(false)
+  // Zähler für dragenter/dragleave: Kindelemente lösen eigene Ereignisse aus (sonst Flackern)
+  const dragDepth = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const available = useSyncExternalStore(noSubscribe, () => getRecognition() !== null, () => false)
   const speechSupported = available && !blocked
   const withCalendar = useAiContext()
@@ -97,16 +146,15 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
     el.style.height = `${el.scrollHeight}px`
   }, [text])
 
-  const submit = useCallback(async (value: string) => {
-    const transcript = value.trim()
-    if (!transcript) return
+  // Schickt Text oder Datei zur Auswertung und zeigt danach die Vorschlagsliste
+  const evaluate = useCallback(async (url: string, body: object, transcript: string) => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/parse-event', {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: transcript, withCalendar }),
+        body: JSON.stringify({ ...body, withCalendar }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(data?.error ?? 'Nichts erkannt')
@@ -122,6 +170,46 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       setLoading(false)
     }
   }, [withCalendar])
+
+  const submit = useCallback(async (value: string) => {
+    const transcript = value.trim()
+    if (!transcript) return
+    setBusyText('Werte aus …')
+    await evaluate('/api/parse-event', { text: transcript }, transcript)
+  }, [evaluate])
+
+  async function importFile(file: File) {
+    if (loading || listening) return
+    setError('')
+    if (!FILE_TYPES.includes(file.type)) {
+      setError(/hei[cf]/i.test(file.type || file.name) ? 'HEIC-Fotos bitte als JPG speichern' : 'Nur PDF oder Foto (JPG, PNG, WebP, GIF)')
+      return
+    }
+    setLoading(true)
+    setBusyText(`Lese „${file.name}“ …`)
+    try {
+      const { blob, type } = file.type.startsWith('image/') ? await shrinkImage(file) : { blob: file, type: file.type }
+      if (blob.size > (type.startsWith('image/') ? MAX_IMAGE_BYTES : MAX_FILE_BYTES)) {
+        setError(type.startsWith('image/') ? 'Foto zu groß (höchstens ca. 3,5 MB)' : 'Datei zu groß (höchstens 10 MB)')
+        setLoading(false)
+        return
+      }
+      const data = await readBase64(blob)
+      const note = textRef.current.trim()
+      await evaluate('/api/import-file', { mediaType: type, data, text: note }, `Datei: ${file.name}${note ? `\n${note}` : ''}`)
+    } catch {
+      setError('Datei konnte nicht gelesen werden')
+      setLoading(false)
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) importFile(file)
+  }
   useEffect(() => { submitRef.current = submit }, [submit])
 
   // Ein Erkennungs-Durchgang; false, wenn der Browser den Start verweigert
@@ -242,6 +330,19 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
     armSilence(FIRST_WORDS_MS)
   }
 
+  // Daneben fallen gelassene Dateien nicht vom Browser öffnen lassen (sonst ist die App weg)
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault()
+    }
+    window.addEventListener('dragover', block)
+    window.addEventListener('drop', block)
+    return () => {
+      window.removeEventListener('dragover', block)
+      window.removeEventListener('drop', block)
+    }
+  }, [])
+
   // Aufnahme beenden, wenn die Komponente verschwindet (z. B. Seitenwechsel)
   useEffect(() => () => {
     clearSilence()
@@ -274,9 +375,27 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   }, [onChanged])
 
   return (
-    <div>
-      <form onSubmit={handleSubmit} className={`flex items-end gap-2 ${stacked ? 'flex-wrap justify-end' : ''}`}>
-        <div className={`relative min-w-0 ${stacked ? 'w-full' : 'flex-1'}`}>
+    <div
+      // Am PC: Datei aufs Eingabefeld ziehen
+      onDragEnter={e => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        dragDepth.current++
+        if (!loading && !listening) setDragging(true)
+      }}
+      onDragOver={e => {
+        if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+      }}
+      onDragLeave={e => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (dragDepth.current === 0) setDragging(false)
+      }}
+      onDrop={handleDrop}
+      className={`rounded-[calc(var(--app-radius)*0.75)] transition-shadow ${dragging ? 'ring-2 ring-accent ring-offset-4 ring-offset-bg' : ''}`}
+    >
+      {/* Schmal (Seitenleiste, Handy): Feld über die ganze Breite, Knöpfe darunter */}
+      <form onSubmit={handleSubmit} className={`flex items-end gap-2 ${stacked ? 'flex-wrap justify-end' : 'max-sm:flex-wrap max-sm:justify-end'}`}>
+        <div className={`relative min-w-0 ${stacked ? 'w-full' : 'flex-1 max-sm:flex-none max-sm:w-full'}`}>
           <label htmlFor="natural-input" className="sr-only">Termine und Aufgaben eingeben</label>
           <textarea
             id="natural-input"
@@ -286,7 +405,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
             onChange={e => changeText(e.target.value)}
             onKeyDown={handleKeyDown}
             maxLength={MAX_LENGTH}
-            placeholder={listening ? 'Ich höre zu …' : withCalendar
+            placeholder={dragging ? 'Datei hier loslassen zum Importieren' : listening ? 'Ich höre zu …' : withCalendar
               ? 'Sag oder tippe alles auf einmal: Termine, Aufgaben, Änderungen'
               : 'Sag oder tippe Termine und Aufgaben, auch mehrere auf einmal'}
             disabled={loading}
@@ -295,6 +414,28 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
             className="block w-full min-h-12 max-h-48 lg:max-h-72 resize-none overflow-y-auto bg-surface-2 text-ink placeholder:text-muted border border-transparent rounded-[calc(var(--app-radius)*0.75)] px-4 py-3 text-[15px] leading-6 focus:outline-none focus:border-accent"
           />
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={FILE_TYPES.join(',')}
+          className="hidden"
+          onChange={e => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (file) importFile(file)
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={loading || listening}
+          aria-label="Datei importieren (PDF oder Foto)"
+          title="Datei importieren (PDF oder Foto)"
+          className="w-12 h-12 shrink-0 rounded-[calc(var(--app-radius)*0.75)] bg-surface-2 text-ink flex items-center justify-center hover:bg-line transition-colors disabled:opacity-40"
+        >
+          <Icon name="file" size={20} />
+        </button>
 
         {/* Ohne Browser-Spracherkennung (z. B. iPhone-Homescreen-App) bleibt die Diktier-Taste der Tastatur */}
         {speechSupported && (
@@ -323,7 +464,7 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
         </button>
       </form>
       {listening && <p role="status" className="mt-2 text-xs text-muted">Sprich einfach drauflos. Nach 5 Sekunden Stille wird automatisch ausgewertet, oder tippe auf das Mikrofon.</p>}
-      {loading && <p role="status" className="mt-2 text-xs text-muted">Werte aus …</p>}
+      {loading && <p role="status" className="mt-2 text-xs text-muted">{busyText}</p>}
       {error && <p role="status" className="mt-2 text-xs text-danger">{error}</p>}
 
       {review && (
