@@ -14,6 +14,7 @@ export interface EventInput {
   category: string
   color: string | null
   rrule: string | null
+  taskId: number | null
 }
 
 type Result = { ok: true; data: EventInput } | { ok: false; error: string }
@@ -65,12 +66,23 @@ export function validateEvent(body: unknown): Result {
 
   const recurrence = parseRecurrence(b.rrule)
   if (!recurrence.ok) return { ok: false, error: 'Ungültige Wiederholung' }
+  // „Irgendwann im Zeitraum“ gibt es nur bei Aufgaben; Termine haben eine feste Zeit
+  if (recurrence.value?.anytime) delete recurrence.value.anytime
   if (recurrence.value?.until && recurrence.value.until < localDate(startTime)) {
     return { ok: false, error: 'Wiederholung endet vor dem Start' }
   }
   const rrule = serializeRecurrence(recurrence.value)
 
-  return { ok: true, data: { title, description, startTime, endTime, category, color, rrule } }
+  // Eingeplante Aufgabe; ob es sie gibt, prüft die Route (checkTaskLink)
+  let taskId: number | null = null
+  if (b.taskId != null) {
+    if (typeof b.taskId !== 'number' || !Number.isInteger(b.taskId) || b.taskId < 1 || b.taskId > MAX_ID) {
+      return { ok: false, error: 'Ungültige Aufgabe' }
+    }
+    taskId = b.taskId
+  }
+
+  return { ok: true, data: { title, description, startTime, endTime, category, color, rrule, taskId } }
 }
 
 // Nur echte JSON-Anfragen: Ein fremdes Formular oder text/plain-POST von einer

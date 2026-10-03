@@ -2,8 +2,9 @@ import Anthropic from '@anthropic-ai/sdk'
 import prisma from './prisma'
 import { CATEGORIES, EventInput, validateEvent } from './validation'
 import { addDays, localDate, TIME_ZONE } from './dates'
-import { describeRecurrence, parseRecurrence } from './recurrence'
+import { describeRecurrence, parseRecurrence, periodOf } from './recurrence'
 import { TaskInput, validateTask } from './tasks'
+import { hiddenRanges, isHiddenDay } from './planned'
 
 const client = new Anthropic()
 
@@ -37,12 +38,13 @@ const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] })
 const RRULE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['freq', 'interval', 'byweekday', 'until'],
+  required: ['freq', 'interval', 'byweekday', 'until', 'anytime'],
   properties: {
     freq: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'yearly'] },
     interval: nullable({ type: 'integer' }),
     byweekday: nullable({ type: 'array', items: { type: 'string', enum: ['mo', 'tu', 'we', 'th', 'fr', 'sa', 'su'] } }),
     until: nullable({ type: 'string', format: 'date' }),
+    anytime: nullable({ type: 'boolean' }),
   },
 }
 const RESPONSE_SCHEMA = {
@@ -121,7 +123,7 @@ async function loadContext(): Promise<Context> {
 async function loadTasks(): Promise<ContextTask[]> {
   const tasks = await prisma.task.findMany({
     where: { eventId: null },
-    select: { id: true, title: true, date: true, rrule: true, completions: { select: { id: true }, take: 1 } },
+    select: { id: true, title: true, date: true, rrule: true, completions: { select: { date: true } } },
     orderBy: [{ position: 'asc' }, { id: 'asc' }],
   })
   const today = localDate(new Date())
@@ -130,7 +132,11 @@ async function loadTasks(): Promise<ContextTask[]> {
     .filter(t => {
       if (t.rrule === null) return t.completions.length === 0
       const rule = parseRecurrence(t.rrule)
-      return !(rule.ok && rule.value?.until && rule.value.until < today)
+      if (!rule.ok || !rule.value) return true
+      if (rule.value.until && rule.value.until < today) return false
+      // „Irgendwann im Zeitraum“ schon erledigt: erst im nächsten Zeitraum wieder einplanbar
+      const period = rule.value.anytime ? periodOf(rule.value, t.date ?? today, today) : null
+      return !period || !t.completions.some(c => c.date >= period.from && c.date <= period.to)
     })
     .slice(0, MAX_CONTEXT_TASKS)
     .map(({ id, title, date, rrule }) => ({ id, title, date, rrule }))
@@ -161,10 +167,15 @@ async function loadEvents(): Promise<ContextEvent[]> {
         { rrule: { not: null }, startTime: { lte: to } },
       ],
     },
-    select: { id: true, title: true, startTime: true, endTime: true, category: true, rrule: true },
+    select: {
+      id: true, title: true, startTime: true, endTime: true, category: true, rrule: true,
+      task: { select: { rrule: true, date: true, createdAt: true, completions: { select: { date: true } } } },
+    },
     orderBy: { startTime: 'asc' },
   })
   return events
+    // Wegen erledigter Aufgabe ausgeblendete Termine sieht die KI so wenig wie der Nutzer
+    .filter(e => !e.task || !(e.rrule === null ? isHiddenDay(hiddenRanges(e.task), localDate(e.startTime)) : hiddenRanges(e.task) === 'all'))
     .filter(e => {
       const rule = parseRecurrence(e.rrule)
       return !(rule.ok && rule.value?.until && rule.value.until < fromDay)
@@ -202,7 +213,7 @@ Offene Aufgaben des Nutzers (ID | Titel | fällig | Wiederholung):
 ${taskLines(context.tasks)}
 </aufgaben>
 
-Soll eine dieser Aufgaben eingeplant werden („plan Steuer machen für Freitag ein“, „plan meine Aufgaben für morgen ein“), lege je Aufgabe einen Termin an: action "create" mit taskId der Aufgabe und ihrem Titel. Wähle freie Zeiten, die sich nicht mit bestehenden Terminen überschneiden, tagsüber zwischen 8 und 20 Uhr, mit sinnvoller Dauer (ohne Angabe 1 Stunde). Die Aufgabe selbst bleibt bestehen; lege sie nicht noch einmal als Aufgabe an. Nennt der Nutzer eine Aufgabe, die schon in der Liste steht, lege sie nicht doppelt an.
+Soll eine dieser Aufgaben eingeplant werden („plan Steuer machen für Freitag ein“, „plan meine Aufgaben für morgen ein“), lege je Aufgabe einen Termin an: action "create" mit taskId der Aufgabe und ihrem Titel. Wähle freie Zeiten, die sich nicht mit bestehenden Terminen überschneiden, tagsüber zwischen 8 und 20 Uhr, mit sinnvoller Dauer (ohne Angabe 1 Stunde). Die Aufgabe selbst bleibt bestehen; lege sie nicht noch einmal als Aufgabe an. Ist es eine wiederkehrende Aufgabe, lege nur einen einzelnen Termin im aktuellen Zeitraum an (keine Serie), bei festem Wochentag spätestens an diesem Tag und sag das in message, z. B. „Bad putzen diese Woche am Samstag 10 Uhr einplanen“. Nennt der Nutzer eine Aufgabe, die schon in der Liste steht, lege sie nicht doppelt an.
 
 Bezieht sich etwas auf einen dieser Termine (verschieben, umbenennen, verlängern, absagen, löschen), nimm ein Element mit action "update" oder "delete" und der passenden eventId. Bei "update" enthält event den vollständigen neuen Stand des Termins (unveränderte Felder übernehmen, description null lassen). Bei einer Serie ändert "update" die ganze Serie; startTime/endTime sind dann der Beginn der Serie. Ist nicht eindeutig, welcher Termin gemeint ist, kein Element anlegen, sondern in notes kurz nachfragen.`
     : 'Du siehst weder den Kalender noch die Aufgabenliste des Nutzers. Soll ein bestehender Termin geändert oder gelöscht oder eine bestehende Aufgabe eingeplant werden, kein Element anlegen, sondern in notes schreiben, dass dafür in den Einstellungen „KI darf Termine und Aufgaben sehen“ eingeschaltet werden muss.'
@@ -221,7 +232,7 @@ ${calendar}
 
 Zieh ALLE Termine und Aufgaben aus der Eingabe heraus, jeweils als eigenes Element in items, in der Reihenfolge, in der sie vorkommen:
 - Termin (etwas mit Uhrzeit oder festem Tag, an dem man irgendwo ist oder etwas stattfindet): action "create", event ausgefüllt, eventId, task und taskId null (taskId nur beim Einplanen einer bestehenden Aufgabe).
-- Aufgabe (etwas, das man erledigen und abhaken will, z. B. „Milch kaufen“, „Steuer machen“, „Bad putzen“): action "task", task ausgefüllt, eventId, taskId und event null. task.date nur, wenn ein Tag genannt ist („morgen“, „bis Freitag“ = dieser Tag), sonst null. Wiederkehrende Aufgaben („jeden Sonntag Bad putzen“) mit rrule.
+- Aufgabe (etwas, das man erledigen und abhaken will, z. B. „Milch kaufen“, „Steuer machen“, „Bad putzen“): action "task", task ausgefüllt, eventId, taskId und event null. task.date nur, wenn ein Tag genannt ist („morgen“, „bis Freitag“ = dieser Tag), sonst null. Wiederkehrende Aufgaben mit rrule: an festem Tag („jeden Sonntag Bad putzen“) mit byweekday und anytime null; ohne festen Tag („einmal pro Woche Bad putzen“, „irgendwann jede Woche“, „einmal im Monat Auto waschen“) freq "weekly" bzw. "monthly" mit anytime true und byweekday null. anytime gibt es nur bei Aufgaben, bei Terminen immer null.
 - Zeiten als ISO-8601 mit Zeitzonen-Offset, z. B. 2026-10-01T14:00:00+02:00. Ohne Dauer: 1 Stunde. Relative Angaben („morgen“, „nächsten Freitag“) vom heutigen Datum aus rechnen.
 - Wiederholungen („jeden Montag“, „werktags“, „alle zwei Wochen“, „monatlich“) als rrule; byweekday nur bei freq "weekly" (werktags = weekly mit mo–fr), sonst null; interval nur wenn größer als 1, sonst null; until nur wenn ein Ende genannt ist, sonst null. Bei neuen Serien sind startTime/endTime das erste Vorkommen ab heute.
 - Regelmäßige Termine (z. B. im Stundenplan „Mo 8–10 Mathe“) als Serie mit rrule, nicht als viele Einzeltermine; until, wenn ein Ende erkennbar ist (z. B. Semesterende).

@@ -47,7 +47,7 @@ function toFcEvents(events: DbEvent[]): EventInput[] {
       id: String(e.id),
       title: e.title,
       classNames: ['cal-event', categoryClass(e.category)],
-      extendedProps: { description: e.description, category: e.category, color: e.color, seriesStart: e.startTime, seriesEnd: e.endTime, rrule: null },
+      extendedProps: { description: e.description, category: e.category, color: e.color, seriesStart: e.startTime, seriesEnd: e.endTime, rrule: null, taskTitle: e.taskTitle ?? null },
     }
     const recurrence = parseRecurrence(e.rrule)
     if (!recurrence.ok || !recurrence.value) return { ...base, start: e.startTime, end: e.endTime }
@@ -55,9 +55,13 @@ function toFcEvents(events: DbEvent[]): EventInput[] {
     // Routine: dtstart ohne Zeitzone, damit FullCalendar die Wochentage in lokaler Zeit rechnet
     const start = new Date(e.startTime)
     const { until, ...rule } = recurrence.value
+    // Ausgelassene Vorkommen (eingeplante Aufgabe erledigt) zur selben Uhrzeit wie dtstart
+    const time = toLocalISO(start).slice(10)
+    const exdate = (e.exdates ?? []).map(d => d + time)
     return {
       ...base,
       rrule: { ...rule, dtstart: toLocalISO(start), ...(until ? { until: `${until}T23:59` } : {}) },
+      ...(exdate.length ? { exdate } : {}),
       duration: { milliseconds: Math.max(new Date(e.endTime).getTime() - start.getTime(), 0) },
       // Einzelne Vorkommen nicht verschieben: das würde die ganze Serie versetzen
       editable: false,
@@ -88,7 +92,7 @@ function dayHeader(arg: DayHeaderContentArg) {
 
 export default function Calendar({ events, onRefresh, focus }: Props) {
   const calRef = useRef<FullCalendar>(null)
-  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData> } | null>(null)
+  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData>; note?: string } | null>(null)
   const [view, setView] = useState({ title: '', type: 'timeGridWeek' })
   const dragging = useRef(false)
 
@@ -134,7 +138,10 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
         endTime: toLocalISO(end),
         category: ev.extendedProps.category ?? 'Sonstiges',
         rrule,
-      }
+      },
+      note: ev.extendedProps.taskTitle
+        ? `Geplant für die Aufgabe „${ev.extendedProps.taskTitle}“. Ist sie abgehakt, wird der Termin ausgeblendet.`
+        : undefined,
     })
   }
 
@@ -265,6 +272,7 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
         <EventModal
           mode={modal.mode}
           initial={modal.initial}
+          note={modal.note}
           onSave={handleSave}
           onDelete={modal.mode === 'edit' ? handleDelete : undefined}
           onClose={() => setModal(null)}

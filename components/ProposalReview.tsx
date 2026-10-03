@@ -2,7 +2,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import EventModal, { EventFormData } from './EventModal'
 import Icon from './Icon'
-import { describeRecurrence, presetKey, PRESETS, Recurrence } from '@/lib/recurrence'
+import RepeatPicker, { taskRule } from './RepeatPicker'
+import { describeRecurrence, presetKey, Recurrence } from '@/lib/recurrence'
 import { TIME_ZONE } from '@/lib/dates'
 
 // Vorschläge der Spracheingabe als Liste: jeden einzeln mit Ja/Nein bestätigen,
@@ -78,7 +79,11 @@ function request(p: Proposal): Promise<Response> {
   }
   if (p.action === 'delete') return fetch(`/api/events/${p.eventId}`, { method: 'DELETE' })
   const e = p.event
-  const body = JSON.stringify({ title: e.title, description: e.description, startTime: e.startTime, endTime: e.endTime, category: e.category, rrule: e.rrule })
+  const body = JSON.stringify({
+    title: e.title, description: e.description, startTime: e.startTime, endTime: e.endTime, category: e.category, rrule: e.rrule,
+    // Eingeplante Aufgabe merken: Ist sie abgehakt, blendet der Kalender den Termin aus
+    ...(p.action === 'create' && p.forTask ? { taskId: p.forTask.id } : {}),
+  })
   return p.action === 'update'
     ? fetch(`/api/events/${p.eventId}`, { method: 'PUT', headers, body })
     : fetch('/api/events', { method: 'POST', headers, body })
@@ -286,7 +291,7 @@ function ProposalCard({ item, disabled, onDecide, onEdit, onTaskChange }: CardPr
           <p className="text-sm text-muted">{detail}</p>
           {before && <p className="text-xs text-muted mt-0.5">Bisher: {before}</p>}
           {series && <p className="text-xs text-muted mt-0.5">Betrifft die ganze Serie.</p>}
-          {p.action === 'create' && p.forTask && <p className="text-xs text-muted mt-0.5">Aufgabe „{p.forTask.title}“ bleibt in deiner Liste.</p>}
+          {p.action === 'create' && p.forTask && <p className="text-xs text-muted mt-0.5">Aufgabe „{p.forTask.title}“ bleibt in deiner Liste. Hakst du sie ab, verschwindet der Termin.</p>}
           {item.error && <p role="alert" className="text-xs text-danger mt-1">{item.error}</p>}
         </div>
         {done ? (
@@ -344,14 +349,16 @@ function TaskEditor({ task, onSave, onCancel }: { task: ProposedTask; onSave: (t
   const [title, setTitle] = useState(task.title)
   const [date, setDate] = useState(task.date ?? '')
   const initialKey = presetKey(task.rrule)
+  const initialAnytime = !!task.rrule?.anytime
   const [repeat, setRepeat] = useState(initialKey)
+  const [anytime, setAnytime] = useState(initialAnytime)
   const titleId = useId()
 
   function save(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
     // Unveränderte Auswahl: Regel der KI behalten (samt Enddatum oder eigener Regel)
-    const rrule = repeat === initialKey ? task.rrule : PRESETS.find(p => p.key === repeat)?.rule ?? null
+    const rrule = repeat === initialKey && anytime === initialAnytime ? task.rrule : taskRule(repeat, anytime)
     onSave({ title: title.trim(), date: date || null, rrule })
   }
 
@@ -375,10 +382,13 @@ function TaskEditor({ task, onSave, onCancel }: { task: ProposedTask; onSave: (t
           Tag
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className={field} />
         </label>
-        <select value={repeat} onChange={e => setRepeat(e.target.value)} aria-label="Wiederholen" className={field}>
-          {initialKey === 'custom' && task.rrule && <option value="custom">{describeRecurrence(task.rrule)}</option>}
-          {PRESETS.map(p => <option key={p.key} value={p.key}>{p.key === 'none' ? 'Einmal' : p.label}</option>)}
-        </select>
+        <RepeatPicker
+          repeat={repeat}
+          anytime={anytime}
+          onChange={(r, a) => { setRepeat(r); setAnytime(a) }}
+          className={field}
+          customLabel={initialKey === 'custom' && task.rrule ? describeRecurrence(task.rrule) : undefined}
+        />
       </div>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="h-10 px-3 rounded-[calc(var(--app-radius)*0.6)] text-sm font-semibold text-muted hover:bg-surface-2">Abbrechen</button>

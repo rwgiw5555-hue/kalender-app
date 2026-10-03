@@ -1,7 +1,8 @@
 'use client'
 import { useId, useState } from 'react'
 import Icon from './Icon'
-import { describeRecurrence, PRESETS } from '@/lib/recurrence'
+import RepeatPicker from './RepeatPicker'
+import { describeRecurrence } from '@/lib/recurrence'
 import type { DayTask } from '@/lib/tasks'
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
   pending: Set<number>
   onToggle: (t: DayTask) => void
   onDelete?: (t: DayTask) => void
-  onAdd?: (title: string, repeat: string) => void
+  onAdd?: (title: string, repeat: string, anytime: boolean) => void
   placeholder?: string
   withRepeat?: boolean
   compact?: boolean // kleinere Darstellung für die Seitenleiste
@@ -39,14 +40,16 @@ export function Checkbox({ done, label, disabled, onClick, compact }: { done: bo
 export default function TaskList({ tasks, pending, onToggle, onDelete, onAdd, placeholder, withRepeat, compact }: Props) {
   const [title, setTitle] = useState('')
   const [repeat, setRepeat] = useState('none')
+  const [anytime, setAnytime] = useState(false)
   const inputId = useId()
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim() || !onAdd) return
-    onAdd(title.trim(), repeat)
+    onAdd(title.trim(), repeat, anytime)
     setTitle('')
     setRepeat('none')
+    setAnytime(false)
   }
 
   return (
@@ -87,14 +90,12 @@ export default function TaskList({ tasks, pending, onToggle, onDelete, onAdd, pl
             className="flex-1 min-w-0 h-11 text-sm px-3 rounded-[calc(var(--app-radius)*0.6)] bg-surface-2 text-ink placeholder:text-muted border border-transparent focus:border-accent focus:outline-none"
           />
           {withRepeat && (
-            <select
-              value={repeat}
-              onChange={e => setRepeat(e.target.value)}
-              aria-label="Wiederholen"
-              className="h-11 text-sm px-2 rounded-[calc(var(--app-radius)*0.6)] bg-surface-2 text-ink border border-transparent focus:border-accent focus:outline-none"
-            >
-              {PRESETS.map(p => <option key={p.key} value={p.key}>{p.key === 'none' ? 'Einmal' : p.label}</option>)}
-            </select>
+            <RepeatPicker
+              repeat={repeat}
+              anytime={anytime}
+              onChange={(r, a) => { setRepeat(r); setAnytime(a) }}
+              className="h-11 max-w-36 text-sm px-2 rounded-[calc(var(--app-radius)*0.6)] bg-surface-2 text-ink border border-transparent focus:border-accent focus:outline-none"
+            />
           )}
           <button
             type="submit"
