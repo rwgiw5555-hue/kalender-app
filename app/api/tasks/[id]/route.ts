@@ -28,8 +28,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // passen alte Haken nicht mehr und werden entfernt
   const kindChanged = result.data.eventId !== existing.eventId || result.data.rrule !== existing.rrule
   const update = prisma.task.update({ where: { id }, data: result.data })
+  // Wird eine eingeplante Aufgabe zum Routine-Schritt, verlieren ihre Termine die Verknüpfung
+  const unlink = result.data.eventId !== null
+    ? [prisma.event.updateMany({ where: { taskId: id }, data: { taskId: null } })]
+    : []
   const task = kindChanged
-    ? (await prisma.$transaction([prisma.taskCompletion.deleteMany({ where: { taskId: id } }), update]))[1]
+    ? (await prisma.$transaction([...unlink, prisma.taskCompletion.deleteMany({ where: { taskId: id } }), update])).at(-1)
     : await update
   return NextResponse.json(task)
 }
