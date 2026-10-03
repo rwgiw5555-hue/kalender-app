@@ -9,7 +9,8 @@ import TaskList from '@/components/TaskList'
 import { addDays } from '@/lib/dates'
 import { DayEvent, timeFmt, useDay, useToday } from '@/lib/day'
 import { getHolidays } from '@/lib/holidays'
-import { describeRecurrence, parseRecurrence, PRESETS } from '@/lib/recurrence'
+import { describeRecurrence, parseRecurrence } from '@/lib/recurrence'
+import { taskRule } from '@/components/RepeatPicker'
 import { categoryColors, usePalette } from '@/lib/theme'
 
 const dayFmt = new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
@@ -125,9 +126,9 @@ export default function Heute() {
                   pending={pending}
                   onToggle={data.toggle}
                   onDelete={t => data.deleteTask(t.id)}
-                  onAdd={(title, repeat) => data.addTask(
+                  onAdd={(title, repeat, anytime) => data.addTask(
                     title,
-                    PRESETS.find(p => p.key === repeat)?.rule ?? null,
+                    taskRule(repeat, anytime),
                     repeat !== 'none' || day !== today ? day : null,
                   )}
                   placeholder="Aufgabe hinzufügen"

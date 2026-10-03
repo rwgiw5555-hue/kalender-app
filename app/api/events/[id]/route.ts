@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { parseId, readJson, validateEvent } from '@/lib/validation'
 import { rejectForeign } from '@/lib/request-guard'
+import { checkTaskLink } from '@/lib/planned'
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const denied = rejectForeign(req)
@@ -25,6 +26,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     ...body,
   })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 })
+  if (result.data.taskId !== existing.taskId) {
+    const linkError = await checkTaskLink(result.data.taskId)
+    if (linkError) return NextResponse.json({ error: linkError }, { status: 400 })
+  }
 
   const event = await prisma.event.update({ where: { id }, data: result.data })
   return NextResponse.json(event)

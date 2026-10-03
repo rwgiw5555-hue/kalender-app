@@ -16,6 +16,10 @@ export interface DbEvent {
   category?: string | null
   color?: string | null
   rrule?: string | null
+  // Termin plant eine Aufgabe ein; Tage, an denen er wegen erledigter Aufgabe ausfällt (nur Serien)
+  taskId?: number | null
+  taskTitle?: string | null
+  exdates?: string[]
 }
 
 export interface DayEvent extends DbEvent {
@@ -36,7 +40,7 @@ export function eventsOnDay(events: DbEvent[], day: string): DayEvent[] {
     const startTime = timeFmt.format(start)
     const rule = parseRecurrence(e.rrule)
     if (rule.ok && rule.value) {
-      if (occursOn(rule.value, startDay, day)) result.push({ ...e, label: startTime, sortKey: startTime })
+      if (occursOn(rule.value, startDay, day) && !e.exdates?.includes(day)) result.push({ ...e, label: startTime, sortKey: startTime })
       continue
     }
     const endTime = timeFmt.format(end)

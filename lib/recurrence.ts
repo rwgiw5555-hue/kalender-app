@@ -1,7 +1,7 @@
 // Wiederholungsregeln für Routinen. Gespeichert als JSON-Text im Feld Event.rrule,
 // angezeigt über @fullcalendar/rrule. Wird von Client und Server genutzt.
 
-import { dayNumber, isDateString } from './dates'
+import { addDays, dayNumber, isDateString } from './dates'
 
 export const FREQS = ['daily', 'weekly', 'monthly', 'yearly'] as const
 export const WEEKDAYS = ['mo', 'tu', 'we', 'th', 'fr', 'sa', 'su'] as const
@@ -14,6 +14,9 @@ export interface Recurrence {
   interval?: number
   byweekday?: Weekday[]
   until?: string // YYYY-MM-DD, letzter Tag der Serie (inklusive)
+  // Nur Aufgaben: „irgendwann im Zeitraum“ statt an festem Tag. Der Zeitraum ist die
+  // Woche (Mo–So) bzw. der Kalendermonat, bei interval > 1 entsprechend mehrere.
+  anytime?: true
 }
 
 type ParseResult = { ok: true; value: Recurrence | null } | { ok: false }
@@ -63,6 +66,12 @@ export function parseRecurrence(input: unknown): ParseResult {
     value.until = r.until
   }
 
+  if (r.anytime != null && r.anytime !== false) {
+    // Nur für Wochen und Monate sinnvoll und nicht zusammen mit festen Wochentagen
+    if (r.anytime !== true || (value.freq !== 'weekly' && value.freq !== 'monthly') || value.byweekday) return { ok: false }
+    value.anytime = true
+  }
+
   return { ok: true, value }
 }
 
@@ -81,6 +90,7 @@ export const PRESETS: { key: string; label: string; rule: Recurrence | null }[] 
   { key: 'yearly', label: 'Jährlich', rule: { freq: 'yearly' } },
 ]
 
+// Vergleich ohne `anytime`: Die Vorlage (wöchentlich …) und „fester Tag / irgendwann“ werden getrennt gewählt
 function sameRule(a: Recurrence, b: Recurrence) {
   return a.freq === b.freq
     && (a.interval ?? 1) === (b.interval ?? 1)
@@ -97,6 +107,10 @@ const DAY_NAMES: Record<Weekday, string> = { mo: 'Mo', tu: 'Di', we: 'Mi', th: '
 
 export function describeRecurrence(r: Recurrence): string {
   const n = r.interval ?? 1
+  if (r.anytime) {
+    const [one, many] = r.freq === 'monthly' ? ['im Monat', 'Monate'] : ['pro Woche', 'Wochen']
+    return n === 1 ? `Einmal ${one}` : `Einmal alle ${n} ${many}`
+  }
   if (presetKey({ ...r, until: undefined }) === 'weekdays') return 'Werktags'
   const unit = { daily: ['Täglich', 'Tage'], weekly: ['Wöchentlich', 'Wochen'], monthly: ['Monatlich', 'Monate'], yearly: ['Jährlich', 'Jahre'] }[r.freq]
   let text = n === 1 ? unit[0] : `Alle ${n} ${unit[1]}`
@@ -104,12 +118,36 @@ export function describeRecurrence(r: Recurrence): string {
   return text
 }
 
+// Zeitraum (erster und letzter Tag) einer „irgendwann im Zeitraum“-Regel, der `date` enthält.
+// Wochen beginnen am Montag; mehrere Wochen/Monate zählen ab dem Zeitraum, in dem `start` liegt.
+// null, wenn `date` vor dem Beginn oder nach dem Ende der Serie liegt.
+export function periodOf(rule: Recurrence, start: string, date: string): { from: string; to: string } | null {
+  if (date < start || (rule.until && date > rule.until)) return null
+  const interval = rule.interval ?? 1
+  if (rule.freq === 'monthly') {
+    const months = (y: number, m: number) => y * 12 + m
+    const s = months(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1)
+    const d = months(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1)
+    const first = s + Math.floor((d - s) / interval) * interval
+    const iso = (n: number) => `${Math.floor(n / 12)}-${String((n % 12) + 1).padStart(2, '0')}-01`
+    return { from: iso(first), to: addDays(iso(first + interval), -1) }
+  }
+  // Montag der jeweiligen Woche; 1970-01-01 war ein Donnerstag
+  const monday = (n: number) => n - ((n + 3) % 7)
+  const s = monday(dayNumber(start))
+  const first = s + Math.floor((monday(dayNumber(date)) - s) / (7 * interval)) * 7 * interval
+  const from = addDays('1970-01-01', first)
+  return { from, to: addDays(from, 7 * interval - 1) }
+}
+
 // Findet die Serie mit Beginn am Tag `start` (YYYY-MM-DD) auch am Tag `date` statt?
+// Bei „irgendwann im Zeitraum“ (nur Aufgaben) an jedem Tag der Serie.
 // Tagesgenau und ohne Zeitzonen, passend zu dem, was @fullcalendar/rrule anzeigt
 // (Wochen beginnen am Montag).
 export function occursOn(rule: Recurrence, start: string, date: string): boolean {
   if (date < start) return false
   if (rule.until && date > rule.until) return false
+  if (rule.anytime) return true
   const interval = rule.interval ?? 1
   const s = new Date(start + 'T00:00:00Z')
   const d = new Date(date + 'T00:00:00Z')

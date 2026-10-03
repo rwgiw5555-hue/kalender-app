@@ -17,7 +17,12 @@ model Event {
   color       String?
   rrule       String?
   createdAt   DateTime @default(now())
-  steps       Task[]
+  steps       Task[]   @relation("RoutineSteps")
+  // Termin plant eine Aufgabe ein: Ist sie abgehakt, wird der Termin ausgeblendet (nicht gelöscht)
+  taskId      Int?
+  task        Task?    @relation("PlannedEvents", fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
 }
 
 // Aufgabe zum Abhaken. Entweder eigenständig (optional mit Datum und
@@ -28,10 +33,11 @@ model Task {
   date        String?          // YYYY-MM-DD: fällig ab / Beginn der Wiederholung
   rrule       String?          // gleiche Regeln wie bei Terminen
   eventId     Int?
-  event       Event?           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event?           @relation("RoutineSteps", fields: [eventId], references: [id], onDelete: Cascade)
   position    Int              @default(0)
   createdAt   DateTime         @default(now())
   completions TaskCompletion[]
+  planned     Event[]          @relation("PlannedEvents")
 
   @@index([eventId])
 }

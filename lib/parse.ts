@@ -37,12 +37,13 @@ const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] })
 const RRULE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['freq', 'interval', 'byweekday', 'until'],
+  required: ['freq', 'interval', 'byweekday', 'until', 'anytime'],
   properties: {
     freq: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'yearly'] },
     interval: nullable({ type: 'integer' }),
     byweekday: nullable({ type: 'array', items: { type: 'string', enum: ['mo', 'tu', 'we', 'th', 'fr', 'sa', 'su'] } }),
     until: nullable({ type: 'string', format: 'date' }),
+    anytime: nullable({ type: 'boolean' }),
   },
 }
 const RESPONSE_SCHEMA = {
@@ -202,7 +203,7 @@ Offene Aufgaben des Nutzers (ID | Titel | fällig | Wiederholung):
 ${taskLines(context.tasks)}
 </aufgaben>
 
-Soll eine dieser Aufgaben eingeplant werden („plan Steuer machen für Freitag ein“, „plan meine Aufgaben für morgen ein“), lege je Aufgabe einen Termin an: action "create" mit taskId der Aufgabe und ihrem Titel. Wähle freie Zeiten, die sich nicht mit bestehenden Terminen überschneiden, tagsüber zwischen 8 und 20 Uhr, mit sinnvoller Dauer (ohne Angabe 1 Stunde). Die Aufgabe selbst bleibt bestehen; lege sie nicht noch einmal als Aufgabe an. Nennt der Nutzer eine Aufgabe, die schon in der Liste steht, lege sie nicht doppelt an.
+Soll eine dieser Aufgaben eingeplant werden („plan Steuer machen für Freitag ein“, „plan meine Aufgaben für morgen ein“), lege je Aufgabe einen Termin an: action "create" mit taskId der Aufgabe und ihrem Titel. Wähle freie Zeiten, die sich nicht mit bestehenden Terminen überschneiden, tagsüber zwischen 8 und 20 Uhr, mit sinnvoller Dauer (ohne Angabe 1 Stunde). Die Aufgabe selbst bleibt bestehen; lege sie nicht noch einmal als Aufgabe an. Ist es eine wiederkehrende Aufgabe, lege nur einen einzelnen Termin im aktuellen Zeitraum an (keine Serie) und sag das in message, z. B. „Bad putzen diese Woche am Samstag 10 Uhr einplanen“. Nennt der Nutzer eine Aufgabe, die schon in der Liste steht, lege sie nicht doppelt an.
 
 Bezieht sich etwas auf einen dieser Termine (verschieben, umbenennen, verlängern, absagen, löschen), nimm ein Element mit action "update" oder "delete" und der passenden eventId. Bei "update" enthält event den vollständigen neuen Stand des Termins (unveränderte Felder übernehmen, description null lassen). Bei einer Serie ändert "update" die ganze Serie; startTime/endTime sind dann der Beginn der Serie. Ist nicht eindeutig, welcher Termin gemeint ist, kein Element anlegen, sondern in notes kurz nachfragen.`
     : 'Du siehst weder den Kalender noch die Aufgabenliste des Nutzers. Soll ein bestehender Termin geändert oder gelöscht oder eine bestehende Aufgabe eingeplant werden, kein Element anlegen, sondern in notes schreiben, dass dafür in den Einstellungen „KI darf Termine und Aufgaben sehen“ eingeschaltet werden muss.'
@@ -221,7 +222,7 @@ ${calendar}
 
 Zieh ALLE Termine und Aufgaben aus der Eingabe heraus, jeweils als eigenes Element in items, in der Reihenfolge, in der sie vorkommen:
 - Termin (etwas mit Uhrzeit oder festem Tag, an dem man irgendwo ist oder etwas stattfindet): action "create", event ausgefüllt, eventId, task und taskId null (taskId nur beim Einplanen einer bestehenden Aufgabe).
-- Aufgabe (etwas, das man erledigen und abhaken will, z. B. „Milch kaufen“, „Steuer machen“, „Bad putzen“): action "task", task ausgefüllt, eventId, taskId und event null. task.date nur, wenn ein Tag genannt ist („morgen“, „bis Freitag“ = dieser Tag), sonst null. Wiederkehrende Aufgaben („jeden Sonntag Bad putzen“) mit rrule.
+- Aufgabe (etwas, das man erledigen und abhaken will, z. B. „Milch kaufen“, „Steuer machen“, „Bad putzen“): action "task", task ausgefüllt, eventId, taskId und event null. task.date nur, wenn ein Tag genannt ist („morgen“, „bis Freitag“ = dieser Tag), sonst null. Wiederkehrende Aufgaben mit rrule: an festem Tag („jeden Sonntag Bad putzen“) mit byweekday und anytime null; ohne festen Tag („einmal pro Woche Bad putzen“, „irgendwann jede Woche“, „einmal im Monat Auto waschen“) freq "weekly" bzw. "monthly" mit anytime true und byweekday null. anytime gibt es nur bei Aufgaben, bei Terminen immer null.
 - Zeiten als ISO-8601 mit Zeitzonen-Offset, z. B. 2026-10-01T14:00:00+02:00. Ohne Dauer: 1 Stunde. Relative Angaben („morgen“, „nächsten Freitag“) vom heutigen Datum aus rechnen.
 - Wiederholungen („jeden Montag“, „werktags“, „alle zwei Wochen“, „monatlich“) als rrule; byweekday nur bei freq "weekly" (werktags = weekly mit mo–fr), sonst null; interval nur wenn größer als 1, sonst null; until nur wenn ein Ende genannt ist, sonst null. Bei neuen Serien sind startTime/endTime das erste Vorkommen ab heute.
 - Regelmäßige Termine (z. B. im Stundenplan „Mo 8–10 Mathe“) als Serie mit rrule, nicht als viele Einzeltermine; until, wenn ein Ende erkennbar ist (z. B. Semesterende).

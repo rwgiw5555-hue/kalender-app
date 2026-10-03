@@ -40,7 +40,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const id = parseId((await params).id)
   if (id === null) return NextResponse.json({ error: 'Ungültige ID' }, { status: 400 })
 
-  const [, { count }] = await prisma.$transaction([
+  // Eingeplante Termine bleiben, verlieren nur die Verknüpfung (nicht auf SQLite-Fremdschlüssel verlassen)
+  const [, , { count }] = await prisma.$transaction([
+    prisma.event.updateMany({ where: { taskId: id }, data: { taskId: null } }),
     prisma.taskCompletion.deleteMany({ where: { taskId: id } }),
     prisma.task.deleteMany({ where: { id } }),
   ])

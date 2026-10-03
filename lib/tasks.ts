@@ -1,6 +1,6 @@
 import prisma from './prisma'
 import { isDateString, localDate } from './dates'
-import { occursOn, parseRecurrence, Recurrence, serializeRecurrence } from './recurrence'
+import { occursOn, parseRecurrence, periodOf, Recurrence, serializeRecurrence } from './recurrence'
 
 const MAX_TITLE = 200
 const MAX_POSITION = 100000
@@ -98,7 +98,8 @@ export interface DayTask {
 
 // Alle Aufgaben, die an `day` angezeigt werden:
 // - Schritte einer Routine, wenn die Routine an dem Tag stattfindet
-// - wiederkehrende Aufgaben, wenn sie an dem Tag fällig sind
+// - wiederkehrende Aufgaben, wenn sie an dem Tag fällig sind; „irgendwann im Zeitraum“
+//   an jedem Tag des Zeitraums, bis sie abgehakt sind, danach nur noch am Tag des Hakens
 // - einmalige Aufgaben ohne Datum oder mit Datum bis `day`, solange offen;
 //   erledigte nur an dem Tag, an dem sie abgehakt wurden
 export async function tasksForDay(day: string): Promise<DayTask[]> {
@@ -115,7 +116,11 @@ export async function tasksForDay(day: string): Promise<DayTask[]> {
     let show = taskOccursOn(t, day)
     let overdue = false
 
-    if (show !== null) {
+    if (show && recurrence?.anytime && !t.event) {
+      // Schon an einem anderen Tag dieses Zeitraums erledigt: bis zum nächsten Zeitraum ausblenden
+      const period = periodOf(recurrence, t.date ?? day, day)
+      show = !period || doneToday || !t.completions.some(c => c.date >= period.from && c.date <= period.to)
+    } else if (show !== null) {
       // Routine-Schritt oder wiederkehrende Aufgabe: steht fest
     } else if (t.completions.length > 0) {
       show = doneToday
