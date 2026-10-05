@@ -7,10 +7,15 @@ import NaturalInput from './NaturalInput'
 // mit der Eingabe für Sprache/Text/Datei und dem Weg zum normalen Formular.
 export default function QuickAdd({ onChanged, onManual }: { onChanged: () => void; onManual: () => void }) {
   const [open, setOpen] = useState(false)
+  // Während Aufnahme/Auswertung nicht schließen, sonst geht das Ergebnis still verloren
+  const [busy, setBusy] = useState(false)
+  // iPhone: Abstand zur eingeblendeten Tastatur, damit sie das Blatt nicht verdeckt
+  const [keyboard, setKeyboard] = useState(0)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
 
   function close() {
+    if (busy) return
     setOpen(false)
     buttonRef.current?.focus()
   }
@@ -24,8 +29,18 @@ export default function QuickAdd({ onChanged, onManual }: { onChanged: () => voi
       if (e.key === 'Escape' && !document.querySelector('[role=dialog][aria-modal=true]:not([data-sheet])')) close()
     }
     window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [open])
+    const vv = window.visualViewport
+    const update = () => setKeyboard(vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0)
+    vv?.addEventListener('resize', update)
+    vv?.addEventListener('scroll', update)
+    update()
+    return () => {
+      window.removeEventListener('keydown', handler)
+      vv?.removeEventListener('resize', update)
+      vv?.removeEventListener('scroll', update)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- close liest busy beim Aufruf
+  }, [open, busy])
 
   return (
     <>
@@ -41,7 +56,7 @@ export default function QuickAdd({ onChanged, onManual }: { onChanged: () => voi
       </button>
 
       {open && (
-        <div className="lg:hidden fixed inset-0 z-40 flex items-end bg-black/40 animate-fade-in" onClick={close}>
+        <div className="lg:hidden fixed inset-x-0 top-0 z-40 flex items-end bg-black/40 animate-fade-in" style={{ bottom: keyboard }} onClick={close}>
           <div
             ref={sheetRef}
             role="dialog"
@@ -55,14 +70,16 @@ export default function QuickAdd({ onChanged, onManual }: { onChanged: () => voi
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" aria-hidden />
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-head text-lg font-bold">Eintragen</h2>
-              <button type="button" onClick={close} aria-label="Schließen" className="w-10 h-10 -mr-2 rounded-full flex items-center justify-center text-muted hover:bg-surface-2">
+              <button type="button" onClick={close} disabled={busy} aria-label="Schließen" className="w-10 h-10 -mr-2 rounded-full flex items-center justify-center text-muted hover:bg-surface-2 disabled:opacity-40">
                 <Icon name="close" size={20} />
               </button>
             </div>
             <NaturalInput
+              onBusyChange={setBusy}
               onChanged={() => {
                 onChanged()
-                close()
+                setOpen(false)
+                buttonRef.current?.focus()
               }}
             />
             <button
@@ -71,7 +88,8 @@ export default function QuickAdd({ onChanged, onManual }: { onChanged: () => voi
                 close()
                 onManual()
               }}
-              className="mt-3 w-full h-11 rounded-[calc(var(--app-radius)*0.75)] border border-line text-sm font-semibold text-ink hover:bg-surface-2"
+              disabled={busy}
+              className="disabled:opacity-40 mt-3 w-full h-11 rounded-[calc(var(--app-radius)*0.75)] border border-line text-sm font-semibold text-ink hover:bg-surface-2"
             >
               Termin ohne KI eintragen
             </button>

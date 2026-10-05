@@ -109,6 +109,20 @@ export default function Calendar({ events, onRefresh, focus, createRequest }: Pr
   const [view, setView] = useState({ title: '', type: 'timeGridWeek' })
   const dragging = useRef(false)
   const narrow = useNarrow()
+  // Fokus nach dem Schließen des Dialogs dorthin zurück, wo er vorher war
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const modalOpen = modal !== null
+  useEffect(() => {
+    if (!modalOpen && returnFocus.current?.isConnected) {
+      returnFocus.current.focus()
+      returnFocus.current = null
+    }
+  }, [modalOpen])
+  // Beim Öffnen merken (vor dem Dialog-Effekt, der den Fokus ins Titelfeld setzt)
+  function openModal(m: NonNullable<typeof modal>) {
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setModal(m)
+  }
 
   // Auf schmalen Bildschirmen mit der Tagesansicht starten
   useEffect(() => {
@@ -132,7 +146,7 @@ export default function Calendar({ events, onRefresh, focus, createRequest }: Pr
 
   function openCreate(start: Date) {
     const end = new Date(start.getTime() + 60 * 60 * 1000)
-    setModal({ mode: 'create', initial: { startTime: toLocalISO(start), endTime: toLocalISO(end) } })
+    openModal({ mode: 'create', initial: { startTime: toLocalISO(start), endTime: toLocalISO(end) } })
   }
 
   function handleDateClick(arg: DateClickArg) {
@@ -149,7 +163,7 @@ export default function Calendar({ events, onRefresh, focus, createRequest }: Pr
     // Bei Routinen die Serie bearbeiten, nicht das angeklickte Vorkommen
     const start = rrule ? new Date(ev.extendedProps.seriesStart) : ev.start!
     const end = rrule ? new Date(ev.extendedProps.seriesEnd) : ev.end ?? new Date(ev.start!.getTime() + 3600000)
-    setModal({
+    openModal({
       mode: 'edit',
       initial: {
         id: Number(ev.id),
