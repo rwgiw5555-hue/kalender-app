@@ -1,5 +1,6 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import Icon from './Icon'
 import ProposalReview, { Proposal } from './ProposalReview'
 import { useAiContext } from '@/lib/client'
@@ -8,6 +9,8 @@ interface Props {
   onChanged: () => void
   // Schmale Spalte (Seitenleiste am PC): Knöpfe unter dem Feld statt daneben
   stacked?: boolean
+  // Meldet, ob gerade aufgenommen oder ausgewertet wird (z. B. damit ein Blatt offen bleibt)
+  onBusyChange?: (busy: boolean) => void
 }
 
 // Ca. 2–3 Minuten Sprache; muss zu MAX_LONG_TEXT in lib/parse.ts passen
@@ -100,7 +103,7 @@ interface Review {
   notes: string[]
 }
 
-export default function NaturalInput({ onChanged, stacked }: Props) {
+export default function NaturalInput({ onChanged, stacked, onBusyChange }: Props) {
   const [text, setText] = useState('')
   const [listening, setListening] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -115,6 +118,10 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
   const available = useSyncExternalStore(noSubscribe, () => getRecognition() !== null, () => false)
   const speechSupported = available && !blocked
   const withCalendar = useAiContext()
+  // Eindeutig je Eingabe (Seitenleiste und Handy-Blatt können gleichzeitig existieren)
+  const inputId = useId()
+  const busy = loading || listening || review !== null
+  useEffect(() => { onBusyChange?.(busy) }, [busy, onBusyChange])
 
   const recognitionRef = useRef<Recognition | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -396,9 +403,10 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       {/* Schmal (Seitenleiste, Handy): Feld über die ganze Breite, Knöpfe darunter */}
       <form onSubmit={handleSubmit} className={`flex items-end gap-2 ${stacked ? 'flex-wrap justify-end' : 'max-sm:flex-wrap max-sm:justify-end'}`}>
         <div className={`relative min-w-0 ${stacked ? 'w-full' : 'flex-1 max-sm:flex-none max-sm:w-full'}`}>
-          <label htmlFor="natural-input" className="sr-only">Termine und Aufgaben eingeben</label>
+          <label htmlFor={inputId} className="sr-only">Termine und Aufgaben eingeben</label>
           <textarea
-            id="natural-input"
+            id={inputId}
+            data-natural-input
             ref={textareaRef}
             rows={1}
             value={text}
@@ -467,8 +475,10 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       {loading && <p role="status" className="mt-2 text-xs text-muted">{busyText}</p>}
       {error && <p role="status" className="mt-2 text-xs text-danger">{error}</p>}
 
-      {review && (
-        <ProposalReview transcript={review.transcript} proposals={review.proposals} notes={review.notes} onClose={closeReview} />
+      {/* Portal: auch aus einem Blatt heraus (Handy) über der ganzen Seite */}
+      {review && createPortal(
+        <ProposalReview transcript={review.transcript} proposals={review.proposals} notes={review.notes} onClose={closeReview} />,
+        document.body,
       )}
     </div>
   )

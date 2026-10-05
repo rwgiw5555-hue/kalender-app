@@ -5,7 +5,7 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import rrulePlugin from '@fullcalendar/rrule'
 import interactionPlugin, { DateClickArg, EventResizeDoneArg } from '@fullcalendar/interaction'
 import { DatesSetArg, DayHeaderContentArg, EventClickArg, EventDropArg, EventInput, EventMountArg } from '@fullcalendar/core'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import EventModal, { EventFormData } from './EventModal'
 import Icon from './Icon'
 import { getHolidaysForRange } from '@/lib/holidays'
@@ -18,6 +18,19 @@ interface Props {
   onRefresh: () => void
   // Sprungziel, z. B. aus dem Mini-Monat; `n` zählt hoch, damit auch derselbe Tag erneut springt
   focus?: { date: string; n: number } | null
+  // Hochzählen öffnet den Dialog „Neuer Termin“ (z. B. aus dem +-Knopf am Handy)
+  createRequest?: number
+}
+
+// Schmaler Bildschirm (Handy): kompaktere Monatsansicht, Tag antippen öffnet den Tag
+const NARROW = '(max-width: 639px)'
+function subscribeNarrow(cb: () => void) {
+  const mq = window.matchMedia(NARROW)
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
+function useNarrow() {
+  return useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false)
 }
 
 const HOLIDAYS = getHolidaysForRange(2024, 2030)
@@ -90,11 +103,26 @@ function dayHeader(arg: DayHeaderContentArg) {
   )
 }
 
-export default function Calendar({ events, onRefresh, focus }: Props) {
+export default function Calendar({ events, onRefresh, focus, createRequest }: Props) {
   const calRef = useRef<FullCalendar>(null)
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; initial: Partial<EventFormData>; note?: string } | null>(null)
   const [view, setView] = useState({ title: '', type: 'timeGridWeek' })
   const dragging = useRef(false)
+  const narrow = useNarrow()
+  // Fokus nach dem Schließen des Dialogs dorthin zurück, wo er vorher war
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const modalOpen = modal !== null
+  useEffect(() => {
+    if (!modalOpen && returnFocus.current?.isConnected) {
+      returnFocus.current.focus()
+      returnFocus.current = null
+    }
+  }, [modalOpen])
+  // Beim Öffnen merken (vor dem Dialog-Effekt, der den Fokus ins Titelfeld setzt)
+  function openModal(m: NonNullable<typeof modal>) {
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setModal(m)
+  }
 
   // Auf schmalen Bildschirmen mit der Tagesansicht starten
   useEffect(() => {
@@ -105,6 +133,11 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
     if (focus) calRef.current?.getApi().gotoDate(focus.date)
   }, [focus])
 
+  useEffect(() => {
+    if (createRequest) newEvent()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur auf neue Anfragen reagieren
+  }, [createRequest])
+
   const api = () => calRef.current?.getApi()
 
   function handleDatesSet(arg: DatesSetArg) {
@@ -113,10 +146,12 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
 
   function openCreate(start: Date) {
     const end = new Date(start.getTime() + 60 * 60 * 1000)
-    setModal({ mode: 'create', initial: { startTime: toLocalISO(start), endTime: toLocalISO(end) } })
+    openModal({ mode: 'create', initial: { startTime: toLocalISO(start), endTime: toLocalISO(end) } })
   }
 
   function handleDateClick(arg: DateClickArg) {
+    // Handy, Monatsansicht: Tag antippen zeigt den Tag (wie im iPhone-Kalender)
+    if (narrow && arg.view.type === 'dayGridMonth') return api()?.changeView('timeGridDay', arg.date)
     openCreate(new Date(arg.date))
   }
 
@@ -128,7 +163,7 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
     // Bei Routinen die Serie bearbeiten, nicht das angeklickte Vorkommen
     const start = rrule ? new Date(ev.extendedProps.seriesStart) : ev.start!
     const end = rrule ? new Date(ev.extendedProps.seriesEnd) : ev.end ?? new Date(ev.start!.getTime() + 3600000)
-    setModal({
+    openModal({
       mode: 'edit',
       initial: {
         id: Number(ev.id),
@@ -207,18 +242,19 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex flex-wrap items-center gap-2 px-4 lg:px-6 pt-3 pb-3">
-        <button type="button" onClick={() => api()?.today()} className="h-9 px-3.5 rounded-full border border-line bg-surface text-sm font-semibold hover:bg-surface-2">
+      {/* Handy: Titel, Heute und Pfeile in einer Zeile, darunter die Ansicht; neuer Termin über den +-Knopf */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-2 sm:gap-2 px-4 lg:px-6 pt-2 pb-2 sm:pt-3 sm:pb-3">
+        <button type="button" onClick={() => api()?.today()} className="order-2 sm:order-none h-8 sm:h-9 px-3 sm:px-3.5 rounded-full border border-line bg-surface text-sm font-semibold hover:bg-surface-2">
           Heute
         </button>
-        <button type="button" onClick={() => api()?.prev()} aria-label="Zurück" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface">
+        <button type="button" onClick={() => api()?.prev()} aria-label="Zurück" className="order-3 sm:order-none w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface">
           <Icon name="left" size={20} />
         </button>
-        <button type="button" onClick={() => api()?.next()} aria-label="Weiter" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface">
+        <button type="button" onClick={() => api()?.next()} aria-label="Weiter" className="order-4 sm:order-none w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface">
           <Icon name="right" size={20} />
         </button>
-        <h1 className="font-head text-lg lg:text-2xl font-bold mr-auto">{view.title}</h1>
-        <div className="flex gap-1 p-1 rounded-full border border-line bg-surface" role="group" aria-label="Ansicht">
+        <h1 className="order-1 sm:order-none flex-1 min-w-0 truncate sm:flex-none sm:mr-auto font-head text-xl lg:text-2xl font-bold">{view.title}</h1>
+        <div className="order-5 sm:order-none w-full sm:w-auto grid grid-cols-3 sm:flex gap-1 p-1 rounded-full border border-line bg-surface" role="group" aria-label="Ansicht">
           {VIEWS.map(v => (
             <button
               key={v.key}
@@ -231,10 +267,9 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
             </button>
           ))}
         </div>
-        <button type="button" onClick={newEvent} className="h-9 pl-2.5 pr-3.5 rounded-full bg-accent text-on-accent text-sm font-semibold flex items-center gap-1.5 hover:opacity-90">
+        <button type="button" onClick={newEvent} className="hidden lg:flex h-9 pl-2.5 pr-3.5 rounded-full bg-accent text-on-accent text-sm font-semibold items-center gap-1.5 hover:opacity-90">
           <Icon name="plus" size={18} />
-          <span className="hidden sm:inline">Neuer Termin</span>
-          <span className="sm:hidden">Neu</span>
+          Neuer Termin
         </button>
       </div>
 
@@ -265,6 +300,14 @@ export default function Calendar({ events, onRefresh, focus }: Props) {
           eventDidMount={handleEventMount}
           height="100%"
           eventDisplay="block"
+          // Handy: im Monat nur Titel und höchstens 3 Zeilen pro Tag, „+ mehr“ öffnet den Tag;
+          // in der Woche kurzer Titel ohne Jahr und Termintitel statt abgeschnittener Uhrzeiten
+          views={{
+            dayGridMonth: { displayEventTime: !narrow, dayMaxEventRows: narrow ? 3 : false },
+            timeGridWeek: narrow ? { displayEventTime: false, titleFormat: { day: 'numeric', month: 'short' } } : {},
+          }}
+          moreLinkClick="timeGridDay"
+          moreLinkContent={arg => `+${arg.num} mehr`}
         />
       </div>
 
