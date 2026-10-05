@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import Icon from './Icon'
 import ProposalReview, { Proposal } from './ProposalReview'
 import { useAiContext } from '@/lib/client'
@@ -467,8 +468,10 @@ export default function NaturalInput({ onChanged, stacked }: Props) {
       {loading && <p role="status" className="mt-2 text-xs text-muted">{busyText}</p>}
       {error && <p role="status" className="mt-2 text-xs text-danger">{error}</p>}
 
-      {review && (
-        <ProposalReview transcript={review.transcript} proposals={review.proposals} notes={review.notes} onClose={closeReview} />
+      {/* Portal: auch aus einem Blatt heraus (Handy) über der ganzen Seite */}
+      {review && createPortal(
+        <ProposalReview transcript={review.transcript} proposals={review.proposals} notes={review.notes} onClose={closeReview} />,
+        document.body,
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import AppShell from '@/components/AppShell'
 import CalendarView from '@/components/Calendar'
 import MiniMonth from '@/components/MiniMonth'
 import NaturalInput from '@/components/NaturalInput'
+import QuickAdd from '@/components/QuickAdd'
 import TaskList from '@/components/TaskList'
 import { useDay, useToday } from '@/lib/day'
 
@@ -23,6 +24,7 @@ function useClock() {
 
 export default function Home() {
   const [focus, setFocus] = useState<{ date: string; n: number } | null>(null)
+  const [createRequest, setCreateRequest] = useState(0)
   const today = useToday()
   const clock = useClock()
   // Eine Abfrage für Kalender und Tagesliste in der Seitenleiste
@@ -56,10 +58,8 @@ export default function Home() {
 
   return (
     <AppShell active="kalender" sidebar={sidebar}>
-      <div className="lg:hidden px-4 pt-3">
-        <NaturalInput onChanged={loadEvents} />
-      </div>
-      <CalendarView events={day.events} onRefresh={loadEvents} focus={focus} />
+      <CalendarView events={day.events} onRefresh={loadEvents} focus={focus} createRequest={createRequest} />
+      <QuickAdd onChanged={loadEvents} onManual={() => setCreateRequest(n => n + 1)} />
     </AppShell>
   )
 }
